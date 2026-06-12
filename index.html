@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Envarsa — local-first .env manager for Windows · no cloud, no telemetry</title>
-<meta name="description" content="One local home for your .env files: capture snapshots, recall values masked, hand them back by copy or export. Free, open-source Windows app. No cloud, no telemetry, optional age encryption.">
-<link rel="canonical" href="https://terminalis.github.io/envarsa/">
+<title>Envarsa — local-first .env manager for Windows &amp; Linux · no cloud, no telemetry</title>
+<meta name="description" content="One local home for your .env files: capture snapshots, recall values masked, hand them back by copy or export. Free, open-source app for Windows and Linux. No cloud, no telemetry, optional age encryption.">
+<link rel="canonical" href="https://envarsa.dev/">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0f1116">
 <meta name="color-scheme" content="dark">
@@ -15,10 +15,10 @@
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Envarsa">
-<meta property="og:url" content="https://terminalis.github.io/envarsa/">
+<meta property="og:url" content="https://envarsa.dev/">
 <meta property="og:title" content="Envarsa — a local-first library for your environment values">
-<meta property="og:description" content="Capture a project's .env as a point-in-time snapshot, recall it with values masked, hand values back by clipboard or export. No cloud, no telemetry, no egress.">
-<meta property="og:image" content="https://terminalis.github.io/envarsa/screenshots/demo.png">
+<meta property="og:description" content="Capture a project's .env as a point-in-time snapshot, recall it with values masked, hand values back by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check, off by default — no egress.">
+<meta property="og:image" content="https://envarsa.dev/screenshots/demo.png">
 <meta property="og:image:width" content="1136">
 <meta property="og:image:height" content="759">
 <meta property="og:image:alt" content="Envarsa main window: a project library on the left, an open project with nine environment keys, every value masked as dots.">
@@ -26,8 +26,8 @@
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Envarsa — a local-first library for your environment values">
-<meta name="twitter:description" content="Capture .env snapshots, recall them masked, hand values back when you need them. Free, open source, Windows. No cloud, no telemetry, no egress.">
-<meta name="twitter:image" content="https://terminalis.github.io/envarsa/screenshots/demo.png">
+<meta name="twitter:description" content="Capture .env snapshots, recall them masked, hand values back when you need them. Free, open source, Windows &amp; Linux. No cloud, no telemetry, no egress by default.">
+<meta name="twitter:image" content="https://envarsa.dev/screenshots/demo.png">
 
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect x='7.5' y='7.5' width='113' height='113' rx='27' fill='%2313151b' stroke='%232d3240' stroke-width='1.5'/%3E%3Cpath d='M35.5 44H71' stroke='%23e5b35a' stroke-width='11' stroke-linecap='round'/%3E%3Ccircle cx='35.3' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Ccircle cx='52.7' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Ccircle cx='70' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Ccircle cx='87.4' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Cpath d='M35.5 83.5H92' stroke='%23e5b35a' stroke-width='11' stroke-linecap='round'/%3E%3C/svg%3E">
 
@@ -37,18 +37,18 @@
   "@type": "SoftwareApplication",
   "name": "Envarsa",
   "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "Windows 10, Windows 11",
-  "softwareVersion": "0.1.0",
-  "url": "https://terminalis.github.io/envarsa/",
+  "operatingSystem": "Windows 10, Windows 11, Linux",
+  "softwareVersion": "0.1.1",
+  "url": "https://envarsa.dev/",
   "downloadUrl": "https://github.com/terminalis/envarsa/releases/latest",
   "license": "https://github.com/terminalis/envarsa/blob/main/LICENSE",
-  "description": "A local-first library for your environment values. Capture a project's .env as a point-in-time snapshot, recall and inspect it with values masked, and hand values back out — by clipboard or export. No cloud, no telemetry, no egress.",
+  "description": "A local-first library for your environment values. Capture a project's .env as a point-in-time snapshot, recall and inspect it with values masked, and hand values back out — by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check against GitHub, off by default — no egress.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "terminalis", "url": "https://github.com/terminalis" },
   "screenshot": [
-    "https://terminalis.github.io/envarsa/screenshots/demo.png",
-    "https://terminalis.github.io/envarsa/screenshots/screenshot-02.png",
-    "https://terminalis.github.io/envarsa/screenshots/screenshot-03.png"
+    "https://envarsa.dev/screenshots/demo.png",
+    "https://envarsa.dev/screenshots/screenshot-02.png",
+    "https://envarsa.dev/screenshots/screenshot-03.png"
   ],
   "featureList": [
     "Capture .env files as point-in-time snapshots (file picker, paste, or drag and drop)",
@@ -59,7 +59,7 @@
     "Cross-project key reuse detection — flagged, never linked",
     "One portable plaintext JSON store file with atomic saves and a one-step backup",
     "Optional passphrase encryption at rest in standard age format",
-    "No cloud, no telemetry, no network egress"
+    "No cloud, no telemetry — no network egress beyond an opt-in update check (off by default)"
   ]
 }
 </script>
@@ -71,7 +71,7 @@
     {
       "@type": "Question",
       "name": "Does Envarsa send my values anywhere?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. Envarsa is local-first in the strict sense: no cloud, no telemetry, no network egress. Your values live in one file on your disk and never leave unless you export them yourself." }
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Your values live in one file on your disk and never leave unless you export them yourself. The single deliberate exception to no-egress is the opt-in update check, off by default: one GET to api.github.com for the latest release tag. It transmits no values, nothing downloads or installs itself, and it is the app's entire network surface." }
     },
     {
       "@type": "Question",
@@ -86,7 +86,7 @@
     {
       "@type": "Question",
       "name": "Which platforms does Envarsa run on?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Envarsa 0.1.0 runs on Windows 10 and 11 (x64), as a per-user installer or a portable zip. It needs the WebView2 runtime, which is preinstalled on Windows 11 and on any Windows 10 kept current." }
+      "acceptedAnswer": { "@type": "Answer", "text": "On Windows 10 and 11 (x64), as a per-user installer or a portable zip — both need the WebView2 runtime, preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as an AppImage — webview bundled, runs on any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers) — or as a Debian package that pulls its dependencies from apt." }
     },
     {
       "@type": "Question",
@@ -470,14 +470,14 @@
           or export — when you need a project working again.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download for Windows</a>
+          <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download for Windows &amp; Linux</a>
           <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa" rel="noopener">View source on GitHub</a>
         </div>
-        <p class="cta-note">Installer or portable zip · Windows 10/11 (x64) · unsigned binaries show a one-time SmartScreen prompt</p>
+        <p class="cta-note">Windows 10/11: installer or portable zip · Linux: AppImage or .deb · x64 · unsigned Windows builds show a one-time SmartScreen prompt</p>
         <div class="chip-row">
           <span class="chip">no cloud</span>
           <span class="chip">no telemetry</span>
-          <span class="chip">no egress</span>
+          <span class="chip">no egress by default</span>
           <span class="chip">free &amp; MIT-licensed</span>
           <span class="chip">one portable store file</span>
         </div>
@@ -655,7 +655,8 @@
         <div>
 <pre aria-label="Store file location and format excerpt"><code><span class="c"># default location (overridable in Settings,</span>
 <span class="c"># or with the ENVARSA_STORE_PATH env var)</span>
-%APPDATA%\com.envarsa.app\envarsa.store
+%APPDATA%\com.envarsa.app\envarsa.store       <span class="c"># Windows</span>
+~/.local/share/com.envarsa.app/envarsa.store  <span class="c"># Linux</span>
 
 <span class="c"># the format is yours to read</span>
 {
@@ -696,13 +697,24 @@ $ age -d envarsa.store &gt; store.json</code></pre>
       </div>
       <div class="card">
         <h3>A clipboard that forgets</h3>
-        <p>Copies are marked to stay out of Windows clipboard history (Win+V) and the cross-device cloud clipboard,
-        and Envarsa clears the clipboard after 30&nbsp;seconds if it still holds what was copied.</p>
+        <p>Copies clear themselves after 30&nbsp;seconds if the clipboard still holds what was copied; on Windows
+        they are also marked to stay out of the clipboard history (Win+V) and the cross-device cloud clipboard.
+        Linux has no equivalent exclusion flag: a clipboard manager (Klipper, CopyQ, a GNOME extension) records a
+        copy the moment it lands, and the 30-second clear doesn&rsquo;t purge the manager&rsquo;s own history —
+        pause it or clear it after copying a secret.</p>
       </div>
       <div class="card">
         <h3>Concentration, mitigated</h3>
         <p>Envarsa does concentrate values into one file. That trade is made explicit and defended: masking in the
         UI, atomic saves with a backup, and opt-in passphrase encryption at rest.</p>
+      </div>
+      <div class="card">
+        <h3>The network surface: one opt-in update check</h3>
+        <p>Out of the box Envarsa makes no network calls at all. The single deliberate exception to no-egress is
+        the update check, <strong>off by default</strong>: a GET to <code>api.github.com</code> for the latest
+        release tag, made only when you click <em>Check for updates</em> or opt into the daily check. The reply is
+        treated as untrusted input — nothing but a semver-validated version number is used — and nothing downloads
+        or installs itself. All of it lives in one module, the app&rsquo;s entire network surface.</p>
       </div>
     </div>
   </section>
@@ -714,8 +726,10 @@ $ age -d envarsa.store &gt; store.json</code></pre>
       <h2 id="faq-h">Questions, answered plainly</h2>
       <details>
         <summary>Does Envarsa send my values anywhere?</summary>
-        <p>No. Envarsa is local-first in the strict sense: no cloud, no telemetry, no network egress. Your values
-        live in one file on your disk and never leave unless you export them yourself.</p>
+        <p>No. Your values live in one file on your disk and never leave unless you export them yourself. The
+        single deliberate exception to no-egress is the opt-in update check, off by default: one GET to
+        <code>api.github.com</code> for the latest release tag. It transmits no values, nothing downloads or
+        installs itself, and it is the app&rsquo;s entire network surface.</p>
       </details>
       <details>
         <summary>Is the store encrypted?</summary>
@@ -731,8 +745,10 @@ $ age -d envarsa.store &gt; store.json</code></pre>
       </details>
       <details>
         <summary>Which platforms does it run on?</summary>
-        <p>Envarsa 0.1.0 runs on Windows 10 and 11 (x64), as a per-user installer or a portable zip. It needs the
-        WebView2 runtime — preinstalled on Windows 11 and on any Windows 10 kept current.</p>
+        <p>On Windows 10 and 11 (x64), as a per-user installer or a portable zip — both need the WebView2 runtime,
+        preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as an AppImage — webview
+        bundled, runs on any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers) — or as a Debian
+        package that pulls its dependencies from apt.</p>
       </details>
       <details>
         <summary>Why is every value masked, even boring ones like <code>PORT</code>?</summary>
@@ -765,36 +781,52 @@ $ age -d envarsa.store &gt; store.json</code></pre>
   <section id="download" aria-labelledby="dl-h">
     <div class="container">
       <p class="kicker"># download</p>
-      <h2 id="dl-h">Get Envarsa for Windows</h2>
-      <p class="lede">Windows 10/11, x64. Grab either artifact from the latest GitHub release — same app, two
-      ways to carry it.</p>
+      <h2 id="dl-h">Get Envarsa for Windows or Linux</h2>
+      <p class="lede">Windows 10/11 or Linux, x64. Grab an artifact from the latest GitHub release — same app,
+      four ways to carry it.</p>
       <div class="dl-grid">
         <div class="dl-card">
-          <h3>Installer</h3>
+          <h3>Installer <span class="muted">· Windows</span></h3>
           <span class="file">Envarsa_x.y.z_x64-setup.exe</span>
           <p>Per-user NSIS install — no admin prompt. Fetches the WebView2 runtime on the rare machine that
           lacks it.</p>
           <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download installer</a>
         </div>
         <div class="dl-card">
-          <h3>Portable</h3>
+          <h3>Portable <span class="muted">· Windows</span></h3>
           <span class="file">envarsa_x.y.z_x64_portable.zip</span>
           <p>Unzip anywhere, run <code>envarsa.exe</code> — keep <code>WebView2Loader.dll</code> beside it. No
           installer, no admin, nothing on PATH.</p>
           <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download portable zip</a>
         </div>
+        <div class="dl-card">
+          <h3>AppImage <span class="muted">· Linux</span></h3>
+          <span class="file">Envarsa_x.y.z_amd64.AppImage</span>
+          <p><code>chmod +x</code>, run. The webview (WebKitGTK) and OpenSSL travel inside the file — no install,
+          no root, any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers).</p>
+          <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download AppImage</a>
+        </div>
+        <div class="dl-card">
+          <h3>Debian package <span class="muted">· Linux</span></h3>
+          <span class="file">Envarsa_x.y.z_amd64.deb</span>
+          <p><code>sudo apt install ./Envarsa…amd64.deb</code> — apt pulls the dependencies (WebKitGTK&nbsp;4.1,
+          libssl3) and adds the menu entry.</p>
+          <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download .deb</a>
+        </div>
       </div>
       <div class="dl-know">
         <h3>Three things to know up front</h3>
         <ul class="ticks">
-          <li><strong>Both need the WebView2 runtime</strong> — preinstalled on Windows&nbsp;11 and on any
-          Windows&nbsp;10 kept current. The portable build doesn&rsquo;t fetch it; if the app won&rsquo;t start,
-          <a href="https://developer.microsoft.com/microsoft-edge/webview2/" rel="noopener">install it from Microsoft</a>.</li>
-          <li><strong>The binaries are unsigned</strong> — first launch shows a SmartScreen prompt:
+          <li><strong>The Windows builds need the WebView2 runtime</strong> — preinstalled on Windows&nbsp;11 and
+          on any Windows&nbsp;10 kept current. The portable build doesn&rsquo;t fetch it; if the app won&rsquo;t
+          start, <a href="https://developer.microsoft.com/microsoft-edge/webview2/" rel="noopener">install it from
+          Microsoft</a>. The Linux builds bring their own webview: bundled in the AppImage, pulled by apt for
+          the .deb.</li>
+          <li><strong>The binaries are unsigned</strong> — first launch on Windows shows a SmartScreen prompt:
           <em>More&nbsp;info → Run&nbsp;anyway</em>.</li>
           <li><strong>Portable means no install, not data-on-a-stick</strong> — the store lives in
-          <code>%APPDATA%\com.envarsa.app</code>, not next to the exe. Repoint it in Settings if you want it
-          somewhere you sync.</li>
+          <code>%APPDATA%\com.envarsa.app</code> (Linux: <code>~/.local/share/com.envarsa.app</code>), not next
+          to the exe. Repoint it in Settings if you want it somewhere you sync.</li>
         </ul>
       </div>
     </div>
@@ -815,7 +847,7 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         </svg>
         Envarsa
       </a>
-      <span>0.1.0 · MIT licensed</span>
+      <span>0.1.1 · MIT licensed</span>
       <nav class="foot-links" aria-label="Footer">
         <a href="https://github.com/terminalis/envarsa" rel="noopener">Source</a>
         <a href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Releases</a>
@@ -823,7 +855,7 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         <a href="https://github.com/terminalis/envarsa/issues" rel="noopener">Issues</a>
       </nav>
     </div>
-    <p class="foot-tag"># no cloud · no telemetry · no egress — the files never leave</p>
+    <p class="foot-tag"># no cloud · no telemetry · no egress by default — the files never leave</p>
   </div>
 </footer>
 
