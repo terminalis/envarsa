@@ -1,0 +1,15 @@
+{
+  "name": "envarsa",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Envarsa — a local-first library for your environment values.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "package:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/package-portable.ps1",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

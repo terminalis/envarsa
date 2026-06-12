@@ -1,0 +1,7 @@
+# LF everywhere — repo and working tree, on any OS.
+* text=auto eol=lf
+
+# Binary assets — never converted.
+*.png binary
+*.ico binary
+*.icns binary

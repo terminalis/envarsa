@@ -1,0 +1,46 @@
+[package]
+name = "envarsa"
+version = "0.1.0"
+description = "Envarsa — a local-first library for your environment values."
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+# Used directly (not via the clipboard plugin) so copies can be marked
+# excluded from the Windows clipboard history / cloud clipboard.
+arboard = { version = "3.6", default-features = false }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+age = "0.11"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+# The update check (update.rs) — one GET to api.github.com. native-tls
+# means schannel: Windows' own TLS stack does the handshake, no new
+# TLS code in the binary (and nothing pulls aws-lc-sys, which does not
+# build on windows-gnu).
+ureq = { version = "3", default-features = false, features = ["native-tls"] }
+# Already in the tree via tauri-utils — the same Version type as
+# tauri::PackageInfo.version, so fetched-vs-running compares typed.
+semver = "1"
+
+# Same crate version Tauri's stack already pulls in; only enables the
+# DWM feature gates needed to brand the native title bar.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
