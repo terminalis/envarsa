@@ -6,10 +6,11 @@
 # for inspection without creating a release.
 #
 # The build mirrors the local setup from the README's windows-gnu note: gnu
-# host toolchain (an MSVC build never produces target/release/WebView2Loader.dll,
-# which tauri.conf.json bundles as a resource), stock MinGW-w64 binutils on
-# PATH, and the prefixed gcc aliases disabled so rustc keeps its
-# self-contained linker.
+# host toolchain, stock MinGW-w64 binutils on PATH, and the prefixed gcc
+# aliases disabled so rustc keeps its self-contained linker. The gnu exe
+# loads WebView2Loader.dll at runtime; tauri.conf.json bundles it as a
+# resource, and the staging step below puts it where the resource path
+# expects — nothing else creates that file on a clean checkout.
 
 name: release
 
@@ -62,6 +63,19 @@ jobs:
 
       - name: Install tauri CLI
         run: npm ci
+
+      - name: Stage WebView2Loader.dll
+        run: |
+          # tauri.conf.json bundles target/release/WebView2Loader.dll as a
+          # resource, and tauri-build refuses to build envarsa — even the
+          # debug build behind `cargo test` — while that path is missing.
+          # The DLL ships inside the webview2-com-sys crate: build just that
+          # crate so its build script lays the DLL into its OUT_DIR, then
+          # copy it up to the path the resource step expects.
+          cargo build --release --manifest-path src-tauri/Cargo.toml -p webview2-com-sys
+          $dll = Get-ChildItem src-tauri/target/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          Copy-Item $dll.FullName src-tauri/target/release/WebView2Loader.dll
 
       - name: Run engine tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

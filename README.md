@@ -118,6 +118,12 @@ npm run build    # release exe + NSIS installer (per-user, no admin)
 npm run package:portable   # zip the exe + WebView2Loader.dll from the last build
 ```
 
+One-time staging on a fresh clone: `tauri.conf.json` bundles `target/release/WebView2Loader.dll`
+as a resource, and tauri-build refuses to build anything — even `cargo test` — until that file
+exists. The DLL ships inside the `webview2-com-sys` crate; the *Stage WebView2Loader.dll* step
+in `.github/workflows/release.yml` is the two-command recipe (build `-p webview2-com-sys`, copy
+out of its `out/x64/`).
+
 Engine tests and the end-to-end selftest:
 
 ```
