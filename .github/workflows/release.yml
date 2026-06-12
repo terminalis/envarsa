@@ -1,16 +1,22 @@
-# Builds the Windows artifacts and publishes them to a GitHub Release.
+# Builds the Windows and Linux artifacts and publishes them to a GitHub
+# Release.
 #
 # Triggers on version tags (v0.1.0, v1.2.3, ...): push the tag and the release
-# appears with the NSIS installer and portable zip attached. A manual run
-# (workflow_dispatch) builds the same artifacts and attaches them to the run
-# for inspection without creating a release.
+# appears with the NSIS installer, portable zip, AppImage, and .deb attached.
+# A manual run (workflow_dispatch) builds the same artifacts and attaches them
+# to the run for inspection without creating a release.
 #
-# The build mirrors the local setup from the README's windows-gnu note: gnu
-# host toolchain, stock MinGW-w64 binutils on PATH, and the prefixed gcc
-# aliases disabled so rustc keeps its self-contained linker. The gnu exe
-# loads WebView2Loader.dll at runtime; tauri.conf.json bundles it as a
+# The Windows build mirrors the local setup from the README's windows-gnu
+# note: gnu host toolchain, stock MinGW-w64 binutils on PATH, and the prefixed
+# gcc aliases disabled so rustc keeps its self-contained linker. The gnu exe
+# loads WebView2Loader.dll at runtime; tauri.windows.conf.json bundles it as a
 # resource, and the staging step below puts it where the resource path
 # expects — nothing else creates that file on a clean checkout.
+#
+# The Linux build runs on ubuntu-22.04 deliberately: the AppImage inherits the
+# build host's glibc floor, so the older image keeps it runnable on Ubuntu
+# 22.04+, Debian 12+, and peers. Tauri's bundler pulls WebKitGTK and OpenSSL
+# into the AppImage; the .deb declares them as dependencies instead.
 
 name: release
 
@@ -23,7 +29,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -66,8 +72,8 @@ jobs:
 
       - name: Stage WebView2Loader.dll
         run: |
-          # tauri.conf.json bundles target/release/WebView2Loader.dll as a
-          # resource, and tauri-build refuses to build envarsa — even the
+          # tauri.windows.conf.json bundles target/release/WebView2Loader.dll
+          # as a resource, and tauri-build refuses to build envarsa — even the
           # debug build behind `cargo test` — while that path is missing.
           # The DLL ships inside the webview2-com-sys crate: build just that
           # crate so its build script lays the DLL into its OUT_DIR, then
@@ -86,22 +92,76 @@ jobs:
       - name: Package portable zip
         run: npm run package:portable
 
-      - name: Publish release
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          gh release create $env:GITHUB_REF_NAME `
-            "src-tauri/target/release/bundle/nsis/Envarsa_${version}_x64-setup.exe" `
-            "src-tauri/target/release/bundle/portable/envarsa_${version}_x64_portable.zip" `
-            --verify-tag --generate-notes --title "Envarsa $version"
-
-      - name: Attach artifacts to the run (manual builds)
-        if: github.ref_type != 'tag'
+      - name: Attach artifacts to the run
         uses: actions/upload-artifact@v4
         with:
           name: envarsa-windows-x64
           path: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
             src-tauri/target/release/bundle/portable/*.zip
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fail if tag does not match the app version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "tag $GITHUB_REF_NAME does not match tauri.conf.json version v$version" >&2
+            exit 1
+          fi
+
+      - name: Install system packages
+        run: |
+          # The Tauri v2 Linux prerequisites: WebKitGTK for the webview, the
+          # toolchain for native deps, libssl-dev for native-tls (update.rs).
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev librsvg2-dev libssl-dev xdg-utils
+
+      - name: Install tauri CLI
+        run: npm ci
+
+      - name: Run engine tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build bundles
+        run: npm run build
+
+      - name: Attach artifacts to the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: envarsa-linux-x64
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux]
+    if: github.ref_type == 'tag'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          gh release create "$GITHUB_REF_NAME" \
+            dist/nsis/*-setup.exe \
+            dist/portable/*.zip \
+            dist/appimage/*.AppImage \
+            dist/deb/*.deb \
+            --verify-tag --generate-notes --title "Envarsa $version"

@@ -1,7 +1,8 @@
 //! The update check — the only code in Envarsa that touches the
 //! network, kept in one module so the whole egress surface is a single
 //! audit. One hardcoded HTTPS GET to GitHub with an 8s timeout, no
-//! redirects, schannel TLS; the reply is untrusted input and nothing
+//! redirects, the platform's own TLS stack (schannel on Windows,
+//! OpenSSL on Linux); the reply is untrusted input and nothing
 //! from it is used unless it parses as a semver version. Nothing
 //! downloads, nothing installs, nothing about the library is sent.
 //!
@@ -27,9 +28,9 @@ fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .tls_config(
             ureq::tls::TlsConfig::builder()
-                // schannel — the OS does the handshake and verifies
-                // against the Windows cert store (so enterprise roots
-                // keep working).
+                // The OS does the handshake (schannel on Windows,
+                // OpenSSL on Linux) and verifies against the system
+                // cert store (so enterprise roots keep working).
                 .provider(ureq::tls::TlsProvider::NativeTls)
                 .root_certs(ureq::tls::RootCerts::PlatformVerifier)
                 .build(),
@@ -197,7 +198,7 @@ mod tests {
     }
 
     /// Manual probe (`cargo test live_probe -- --ignored`): proves the
-    /// schannel TLS path and the request shape against the real GitHub
+    /// platform TLS path and the request shape against the real GitHub
     /// API. Passes whether or not a release is published — it only
     /// fails on transport-level errors (DNS, TLS, timeout), which the
     /// error text distinguishes from HTTP statuses.

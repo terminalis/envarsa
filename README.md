@@ -12,24 +12,35 @@ against GitHub, off by default — no egress. The files never leave.
 
 ## Install
 
-Windows 10/11, x64. Grab either artifact from the
+Grab an artifact from the
 [latest release](https://github.com/terminalis/envarsa/releases/latest):
+
+**Windows 10/11, x64:**
 
 - **Installer** (`Envarsa_x.y.z_x64-setup.exe`) — per-user NSIS install, no admin prompt.
   Fetches the WebView2 runtime on the rare machine that lacks it.
 - **Portable** (`envarsa_x.y.z_x64_portable.zip`) — unzip anywhere, run `envarsa.exe`. The
   `WebView2Loader.dll` beside it must stay there. No installer, no admin, nothing on PATH.
 
+**Linux, x64:**
+
+- **AppImage** (`Envarsa_x.y.z_amd64.AppImage`) — `chmod +x`, run. The webview (WebKitGTK) and
+  OpenSSL travel inside the file: no install, no root, any distro with glibc 2.35+
+  (Ubuntu 22.04+, Debian 12+, and peers).
+- **Debian package** (`Envarsa_x.y.z_amd64.deb`) — `sudo apt install ./Envarsa_x.y.z_amd64.deb`;
+  apt pulls the dependencies (WebKitGTK 4.1, libssl3) and adds the menu entry.
+
 Three things to know up front:
 
-- Both need the **WebView2 runtime** — preinstalled on Windows 11 and on any Windows 10 kept
-  current. The portable build doesn't fetch it; if the app won't start, install it
-  [from Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
-- The binaries are **unsigned**, so first launch shows a SmartScreen prompt — *More info* →
-  *Run anyway*.
+- The Windows builds need the **WebView2 runtime** — preinstalled on Windows 11 and on any
+  Windows 10 kept current. The portable build doesn't fetch it; if the app won't start, install
+  it [from Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
+- The binaries are **unsigned**, so first launch on Windows shows a SmartScreen prompt —
+  *More info* → *Run anyway*.
 - **Portable means no install, not data-on-a-stick.** The store still lives in
-  `%APPDATA%\com.envarsa.app`, not next to the exe — moving the folder doesn't move your data.
-  Repoint the store in Settings if you want it somewhere you sync.
+  `%APPDATA%\com.envarsa.app` (Linux: `~/.local/share/com.envarsa.app`), not next to the
+  executable — moving the folder doesn't move your data. Repoint the store in Settings if you
+  want it somewhere you sync.
 
 ## What it is
 
@@ -69,7 +80,8 @@ Everything lives in **one portable file** (`envarsa.store`):
   library there, with name conflicts flagged per project (replace yours, rename the incoming
   one, or skip it). Or keep the live file in a folder you sync yourself (Settings → Change location…).
 
-Location: `%APPDATA%\com.envarsa.app\envarsa.store` by default; overridable in Settings
+Location: `%APPDATA%\com.envarsa.app\envarsa.store` by default
+(Linux: `~/.local/share/com.envarsa.app/envarsa.store`); overridable in Settings
 (persisted in `config.json`) or with the `ENVARSA_STORE_PATH` env var.
 
 ## Core loop
@@ -80,9 +92,9 @@ Location: `%APPDATA%\com.envarsa.app\envarsa.store` by default; overridable in S
    `overridden`; shared keys carry a reuse badge.
 3. **Hand back** — copy one value (it goes core → clipboard without ever rendering on screen),
    copy the whole block, or export a `.env` wherever *you* choose. Exports are byte-identical to
-   what was captured. Copies are marked to stay out of the Windows clipboard history (Win+V) and
-   the cross-device cloud clipboard, and Envarsa clears the clipboard after 30 seconds if it
-   still holds what was copied.
+   what was captured. On Windows, copies are marked to stay out of the clipboard history (Win+V)
+   and the cross-device cloud clipboard — Linux has no such flag (see the security note) — and
+   Envarsa clears the clipboard after 30 seconds if it still holds what was copied.
 4. **History** — every capture appends a snapshot. View older ones read-only, or bring one back
    as latest.
 
@@ -96,8 +108,12 @@ plugin surface exposed to JS); values cross into the UI only on explicit per-val
 single-value copies never transit the UI at all. No registered command takes a filesystem path
 from the webview: dropped files are read on the Rust side of the window event, and store imports
 are keyed by an opaque token minted when you pick the file — preview and apply only accept that
-token. Clipboard copies are excluded from Windows clipboard history / cloud sync and cleared
-after 30 seconds.
+token. Clipboard copies are cleared after 30 seconds; on Windows they are also excluded from
+the clipboard history / cloud sync. Linux has no equivalent exclusion flag: a clipboard manager
+(KDE's Klipper, CopyQ, GNOME clipboard extensions) records a copy the moment it lands, and the
+30-second clear does not purge the manager's own history. Nothing the clipboard API offers
+changes that today — if you run a clipboard manager, pause it or clear its history after
+copying a secret.
 
 The single deliberate exception to no-egress is the update check: a GET to `api.github.com` for
 the latest release tag, made only when you click *Check for updates* or opt into the daily
@@ -108,21 +124,23 @@ semver-validated version number is ever used — and nothing downloads or instal
 
 ## Build
 
-Prereqs: Rust (the `x86_64-pc-windows-gnu` toolchain works without Visual Studio — see note),
-Node for the Tauri CLI, WebView2 runtime (ships with Windows 11).
+Prereqs on Windows: Rust (the `x86_64-pc-windows-gnu` toolchain works without Visual Studio —
+see note), Node for the Tauri CLI, WebView2 runtime (ships with Windows 11). On Linux: Rust,
+Node, and the Tauri system packages —
+`sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev librsvg2-dev libssl-dev`.
 
 ```
 npm install
 npm run dev      # run the app (tauri dev)
-npm run build    # release exe + NSIS installer (per-user, no admin)
-npm run package:portable   # zip the exe + WebView2Loader.dll from the last build
+npm run build    # Windows: release exe + NSIS installer · Linux: AppImage + .deb
+npm run package:portable   # Windows: zip the exe + WebView2Loader.dll from the last build
 ```
 
-One-time staging on a fresh clone: `tauri.conf.json` bundles `target/release/WebView2Loader.dll`
-as a resource, and tauri-build refuses to build anything — even `cargo test` — until that file
-exists. The DLL ships inside the `webview2-com-sys` crate; the *Stage WebView2Loader.dll* step
-in `.github/workflows/release.yml` is the two-command recipe (build `-p webview2-com-sys`, copy
-out of its `out/x64/`).
+One-time staging on a fresh Windows clone: `tauri.windows.conf.json` bundles
+`target/release/WebView2Loader.dll` as a resource, and tauri-build refuses to build anything —
+even `cargo test` — until that file exists. The DLL ships inside the `webview2-com-sys` crate;
+the *Stage WebView2Loader.dll* step in `.github/workflows/release.yml` is the two-command recipe
+(build `-p webview2-com-sys`, copy out of its `out/x64/`). Linux needs no staging.
 
 Engine tests and the end-to-end selftest:
 
@@ -132,6 +150,8 @@ $env:ENVARSA_SELFTEST='1'                     # drives the real app through
 $env:ENVARSA_STORE_PATH="$env:TEMP\st.envarsa"  # capture/reveal/copy/export/
 .\target\debug\envarsa.exe                    # encrypt/lock/unlock/import, prints a report
 ```
+
+(Linux, one line: `ENVARSA_SELFTEST=1 ENVARSA_STORE_PATH=/tmp/st.envarsa ./target/debug/envarsa`)
 
 `ENVARSA_DEMO=1` seeds sample projects into an *empty* store (screenshots, trying it out).
 

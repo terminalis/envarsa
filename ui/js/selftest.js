@@ -58,6 +58,7 @@ export async function runSelftest() {
   let alpha = null;
   let beta = null;
   let storeDir = '';
+  let sep = '/'; // the store path's own separator: '\' on Windows, '/' on Linux
 
   await step('fresh store is unlocked and empty', async () => {
     const st = await api.status();
@@ -65,6 +66,7 @@ export async function runSelftest() {
     assertEq(st.projectCount, 0, 'projectCount');
     assertEq(st.encrypted, false, 'encrypted');
     storeDir = st.storePath.replace(/[\\/][^\\/]+$/, '');
+    sep = st.storePath.includes('\\') ? '\\' : '/';
     assert(storeDir.length > 0, 'store dir resolves');
   });
 
@@ -164,7 +166,7 @@ export async function runSelftest() {
   });
 
   await step('export writes the raw snapshot back out', async () => {
-    const dest = `${storeDir}\\selftest-export.env`;
+    const dest = `${storeDir}${sep}selftest-export.env`;
     await api.selftest.exportToPath(beta.projectId, beta.snapshotId, dest);
     const read = await api.selftest.readFile(dest);
     assertEq(read, BETA_RAW, 'exported bytes');
@@ -263,7 +265,7 @@ export async function runSelftest() {
   });
 
   // State here: one project, "selftest-alpha", 3 snapshots, plaintext.
-  const copyPath = () => `${storeDir}\\selftest-copy.store`;
+  const copyPath = () => `${storeDir}${sep}selftest-copy.store`;
   const TRANSPORT_PASS = 'transport-pass-123';
   let importToken = null;
 
