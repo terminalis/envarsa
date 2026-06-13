@@ -16,7 +16,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Envarsa">
 <meta property="og:url" content="https://envarsa.dev/">
-<meta property="og:title" content="Envarsa — a local-first library for your environment variables">
+<meta property="og:title" content="Envarsa — a local-first .env manager for Windows and Linux">
 <meta property="og:description" content="Capture a project's .env as a point-in-time snapshot, recall it with values masked, hand values back by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check, off by default — no egress.">
 <meta property="og:image" content="https://envarsa.dev/brand/og-image.png">
 <meta property="og:image:width" content="1200">
@@ -25,7 +25,7 @@
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Envarsa — a local-first library for your environment variables">
+<meta name="twitter:title" content="Envarsa — a local-first .env manager for Windows and Linux">
 <meta name="twitter:description" content="Capture .env snapshots, recall them masked, hand values back when you need them. Free, open source, Windows &amp; Linux. No cloud, no telemetry, no egress by default.">
 <meta name="twitter:image" content="https://envarsa.dev/brand/og-image.png">
 
@@ -82,7 +82,7 @@
     {
       "@type": "Question",
       "name": "Does Envarsa write into my projects or inject environment variables?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Only when you ask. It never injects variables into processes, and by default Envarsa is a store-only librarian: it organizes, copies, and exports without writing into your project tree. The one exception is an explicit, user-initiated write to a .env*.local file on a path you choose — in merge or fresh mode, or scaffolded from a .env.example. A committed example file (.env.example, .sample, .template, .dist) is always refused, and the target path is resolved and guarded in Rust, never taken from the webview. Using a value always means you place it." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Only when you ask. It never injects variables into processes, and by default it only stores, copies, and exports — it does not write into your project tree. The one exception is an explicit, user-initiated write to a .env*.local file on a path you choose — in merge or fresh mode, or scaffolded from a .env.example. A committed example file (.env.example, .sample, .template, .dist) is always refused, and the target path is resolved and guarded in Rust, never taken from the webview. Using a value always means you place it." }
     },
     {
       "@type": "Question",
@@ -463,12 +463,11 @@
   <section class="hero" aria-label="Introduction">
     <div class="container hero-grid">
       <div>
-        <h1><span class="accent">Envarsa</span> — a local-first library for your environment variables.</h1>
+        <h1><span class="accent">Envarsa</span> — a local-first <code>.env</code> manager for Windows and Linux.</h1>
         <p class="hero-sub">
-          Env values scatter across projects and machines, get silently duplicated, and die with a disk.
-          Envarsa gives them one home: <strong>capture</strong> a project&rsquo;s <code>.env</code> as a snapshot,
-          <strong>recall</strong> it with values masked, and <strong>hand values back</strong> — by clipboard or
-          export — when you need it.
+          <strong>Capture</strong> a project&rsquo;s <code>.env</code> as a snapshot, <strong>recall</strong> its
+          values masked, and <strong>hand them back</strong> by clipboard or export. Your environment variables
+          live in one file on your machine — no cloud, no telemetry.
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download for Windows &amp; Linux</a>
@@ -531,7 +530,7 @@
         <img src="screenshots/demo.png" width="1136" height="759" decoding="async" fetchpriority="high"
              alt="Envarsa main window: a project list on the left with reuse badges, the lumen-api project open showing nine environment keys grouped under comments, every value masked as a row of dots.">
       </div>
-      <p class="frame-caption">The library, seeded with sample data (<code>ENVARSA_DEMO=1</code>): three projects, nine keys on screen, zero values visible.</p>
+      <p class="frame-caption">Sample data (<code>ENVARSA_DEMO=1</code>): three projects, nine keys on screen, every value masked.</p>
     </div>
   </section>
 
@@ -539,26 +538,23 @@
   <section id="why" aria-labelledby="why-h">
     <div class="container">
       <p class="kicker"># the problem</p>
-      <h2 id="why-h">Your <code>.env</code> files lead short, scattered lives</h2>
+      <h2 id="why-h">Why a dedicated <code>.env</code> manager</h2>
       <p class="lede">
-        They sit untracked at the root of every project — ignored by git on purpose, and by everything else
-        by accident.
+        Your <code>.env</code> files are git-ignored on purpose and backed up by nothing — they accumulate,
+        drift, and vanish.
       </p>
       <div class="cards cards-3">
         <div class="card">
           <h3>Scattered</h3>
-          <p>One per project, per machine, per half-finished experiment. Six months later, the API key you need
-          is in a folder you deleted.</p>
+          <p>One per project, per machine. Months later, the API key you need is in a folder you already deleted.</p>
         </div>
         <div class="card">
-          <h3>Silently duplicated</h3>
-          <p>The same <code>DATABASE_URL</code> pasted into five projects. One of them got rotated. Which one
-          is right is now archaeology.</p>
+          <h3>Duplicated</h3>
+          <p>The same <code>DATABASE_URL</code> pasted into five projects. One got rotated, and now you can&rsquo;t tell which value is current.</p>
         </div>
         <div class="card">
-          <h3>Mortal</h3>
-          <p>No backups, no history, no sync — a dead disk or an overeager cleanup takes them along, and they
-          were the one thing you couldn&rsquo;t re-clone.</p>
+          <h3>Easily lost</h3>
+          <p>No backups, no history, no sync. A dead disk or a stray <code>rm</code> takes them with it — and they&rsquo;re the one thing you can&rsquo;t re-clone.</p>
         </div>
       </div>
     </div>
@@ -568,46 +564,36 @@
   <section id="how" aria-labelledby="how-h">
     <div class="container">
       <p class="kicker"># how it works</p>
-      <h2 id="how-h">Capture, recall, hand back — a librarian&rsquo;s loop</h2>
+      <h2 id="how-h">How it works: capture, recall, hand back</h2>
       <p class="lede">
-        By default Envarsa is a <strong>store-only librarian</strong>: it organizes, copies, and exports without
-        touching your project tree, and never injects into processes. When <em>you</em> ask, it writes a
-        <code>.env*.local</code> on a path you choose — never a committed example file. Using a value always means
-        <em>you</em> place it.
+        Envarsa stores, copies, and exports your <code>.env</code> values. It never injects them into processes
+        or writes to your project tree unless you ask — and the only thing it writes is a <code>.env*.local</code>
+        you choose, never a committed example file.
       </p>
       <div class="cards loop-grid">
         <div class="card">
           <h3><span class="num">01</span>Capture</h3>
-          <p>Import a <code>.env</code> by file picker, paste, or drop. Comments, blank lines, even unparseable
-          lines are kept <strong>byte-for-byte</strong>. Capture is manual — Envarsa never watches your files.</p>
+          <p>Import a <code>.env</code> by file picker, paste, or drop. Comments, blanks, and unparseable lines are kept <strong>byte-for-byte</strong>. Capture is manual; Envarsa never watches your files.</p>
         </div>
         <div class="card">
           <h3><span class="num">02</span>Recall</h3>
-          <p>Find a project by the <strong>name you chose</strong>. Duplicate keys are tagged
-          <code>overridden</code>; keys shared with other projects show a reuse badge — same value or different —
-          flagged, never linked.</p>
+          <p>Find a project by the <strong>name you chose</strong>, not a path. Duplicate keys are tagged <code>overridden</code>; keys shared across projects get a reuse badge — flagged, never linked.</p>
         </div>
         <div class="card">
           <h3><span class="num">03</span>Hand back</h3>
-          <p>Copy one value (core&nbsp;→&nbsp;clipboard, never on screen), copy the block, or export a
-          <strong>byte-identical</strong> <code>.env</code>. Copies stay out of Windows clipboard history and clear
-          after 30&nbsp;seconds.</p>
+          <p>Copy a value (straight to clipboard, never shown on screen), copy the block, or export a <strong>byte-identical</strong> <code>.env</code>. Copies clear after 30&nbsp;seconds.</p>
         </div>
         <div class="card">
           <h3><span class="num">04</span>History</h3>
-          <p>Every capture appends a snapshot. View older ones read-only, or bring one back as latest.</p>
+          <p>Every capture appends a snapshot. View past ones read-only, or restore one as latest.</p>
         </div>
         <div class="card">
           <h3><span class="num">05</span>Write a <code>.env.local</code></h3>
-          <p>Write a snapshot to a <code>.env*.local</code> you pick — <strong>merge</strong> to fill keys while
-          keeping the file&rsquo;s structure, or <strong>fresh</strong> to replace it. A preview counts the changes
-          first. Scaffold from a <code>.env.example</code> with placeholders blanked; committed example files are
-          <strong>refused</strong>.</p>
+          <p>Write a snapshot to a <code>.env*.local</code> you pick: <strong>merge</strong> to fill values while keeping the file&rsquo;s comments and keys, or <strong>fresh</strong> to overwrite — with a preview first. Scaffold from a <code>.env.example</code> with unfillable keys blanked; committed example files are <strong>refused</strong>.</p>
         </div>
         <div class="card">
           <h3><span class="num">06</span>Build it by hand</h3>
-          <p>Or never touch a file: type keys, values, and <code>#</code> comments into the <strong>structured
-          editor</strong> and save. Editing a snapshot saves a <strong>new</strong> one, the old kept in history.</p>
+          <p>No file needed: type keys, values, and <code>#</code> comments into the <strong>structured editor</strong> and save. Editing a snapshot saves a <strong>new</strong> one and keeps the old.</p>
         </div>
       </div>
     </div>
@@ -616,28 +602,28 @@
   <!-- ================================================== gallery -->
   <section id="tour" aria-labelledby="tour-h">
     <div class="container">
-      <p class="kicker"># in the app</p>
-      <h2 id="tour-h">A quiet tool, four moments</h2>
+      <p class="kicker"># screenshots</p>
+      <h2 id="tour-h">Screenshots</h2>
       <div class="gallery-grid">
         <figure class="shot frame">
           <img src="screenshots/screenshot-01.png" width="1122" height="751" loading="lazy" decoding="async"
                alt="Envarsa first run: an empty library with the message 'Your env values, under one roof' and a button to capture the first project.">
-          <figcaption>First run — capture a project, or just drop a <code>.env</code> anywhere on the window.</figcaption>
+          <figcaption>First run: capture a project, or drop a <code>.env</code> onto the window.</figcaption>
         </figure>
         <figure class="shot frame">
           <img src="screenshots/screenshot-02.png" width="1122" height="751" loading="lazy" decoding="async"
                alt="Capture dialog: paste KEY=value lines or pick a .env file, name the project, optionally record a file path hint.">
-          <figcaption>Capture — from a file or pasted lines. The name you give is the project&rsquo;s identity.</figcaption>
+          <figcaption>Capture from a file or pasted lines. The name you give is the project&rsquo;s identity.</figcaption>
         </figure>
         <figure class="shot frame">
           <img src="screenshots/screenshot-03.png" width="1122" height="751" loading="lazy" decoding="async"
                alt="New project by hand dialog: name the project, optionally record a file path, then add KEY=value rows — each with an export toggle — plus buttons to add a variable, add a comment, or seed from a .env.example.">
-          <figcaption>New by hand — build a project key by key, or seed it from a <code>.env.example</code>. Nothing is written to disk unless you choose.</figcaption>
+          <figcaption>Build a project by hand, or seed it from a <code>.env.example</code>. Nothing is written to disk unless you choose.</figcaption>
         </figure>
         <figure class="shot frame">
           <img src="screenshots/screenshot-04.png" width="1122" height="751" loading="lazy" decoding="async"
                alt="Settings dialog: the store file path with Show in Explorer, Change location, Export and Import buttons, and a Protection section for opt-in passphrase encryption with an explicit no-recovery checkbox.">
-          <figcaption>Settings — one portable store file you own, with opt-in encryption and the no-recovery trade-off stated up front.</figcaption>
+          <figcaption>Settings: one portable store file, with opt-in <code>age</code> encryption and an explicit no-recovery checkbox.</figcaption>
         </figure>
       </div>
     </div>
@@ -647,19 +633,14 @@
   <section id="store" aria-labelledby="store-h">
     <div class="container">
       <p class="kicker"># the store file</p>
-      <h2 id="store-h">Everything lives in one file you own</h2>
+      <h2 id="store-h">One portable store file</h2>
       <div class="split">
         <div>
           <ul class="ticks">
-            <li><strong>Plaintext, pretty-printed JSON by default.</strong> Read it, diff it, back it up with any
-            tool you trust. Captured <code>.env</code> text is embedded verbatim.</li>
-            <li><strong>Durable by construction.</strong> Every save is atomic — temp file, fsync, rename — with a
-            one-step <code>.bak</code> sibling. A corrupt store is never overwritten; the app offers the backup.</li>
-            <li><strong>Optional encryption at rest</strong> with a passphrase, in standard
-            <a href="https://age-encryption.org" rel="noopener">age</a> format (scrypt) — the reference CLI decrypts
-            it. No recovery from a lost passphrase, which is why it&rsquo;s opt-in.</li>
-            <li><strong>Portability is manual and yours.</strong> Export a copy (optionally encrypted for transport)
-            and import it elsewhere; projects merge, conflicts flagged per project. Or sync the live file yourself.</li>
+            <li><strong>Plaintext JSON by default.</strong> Read it, diff it, back it up with anything. Captured <code>.env</code> text is embedded verbatim.</li>
+            <li><strong>Atomic writes.</strong> Temp file, fsync, rename, with a one-step <code>.bak</code> sibling. A corrupt store is never overwritten — the app offers the backup at startup.</li>
+            <li><strong>Optional <a href="https://age-encryption.org" rel="noopener">age</a> encryption at rest</strong> (scrypt passphrase), decryptable with the reference age CLI. No recovery if the passphrase is lost.</li>
+            <li><strong>Manual portability.</strong> Export a copy (optionally age-encrypted) and import it elsewhere; projects merge, name conflicts flagged per project. Or sync the file yourself.</li>
           </ul>
         </div>
         <div>
@@ -668,14 +649,14 @@
 %APPDATA%\com.envarsa.app\envarsa.store       <span class="c"># Windows</span>
 ~/.local/share/com.envarsa.app/envarsa.store  <span class="c"># Linux</span>
 
-<span class="c"># the format is yours to read</span>
+<span class="c"># plaintext JSON — read it, diff it</span>
 {
   <span class="k">"format"</span>:   <span class="s">"envarsa-store"</span>,
   <span class="k">"version"</span>:  1,
   <span class="k">"projects"</span>: [ { <span class="k">"name"</span>: <span class="s">"acme-api"</span>,
                   <span class="k">"snapshots"</span>: [ &hellip; ] } ]
 }</code></pre>
-<pre aria-label="Decrypting the store with the age CLI"><code><span class="c"># encrypted? the promise survives the tool</span>
+<pre aria-label="Decrypting the store with the age CLI"><code><span class="c"># if encrypted, decrypt with the standard age CLI</span>
 $ age -d envarsa.store &gt; store.json</code></pre>
         </div>
       </div>
@@ -685,43 +666,31 @@ $ age -d envarsa.store &gt; store.json</code></pre>
   <!-- ================================================== security -->
   <section id="security" class="security" aria-labelledby="sec-h">
     <div class="container">
-      <p class="kicker"># security, honestly</p>
-      <h2 id="sec-h">What the masking is — and what it isn&rsquo;t</h2>
+      <p class="kicker"># security &amp; privacy</p>
+      <h2 id="sec-h">Security and privacy</h2>
       <p class="lede">
-        No theater. Masking is a <strong>shoulder-surfing defense, not encryption</strong>. The baseline secrets
-        boundary is your full-disk encryption — the same boundary as the plaintext <code>.env</code> files you
-        already keep.
+        Envarsa keeps your values in one file and doesn&rsquo;t phone home. The store is <strong>plaintext JSON by
+        default</strong>, with optional <code>age</code> encryption at rest; masking hides values on screen, not on disk.
       </p>
       <div class="card">
-        <h3>Structural masking, not heuristics</h3>
-        <p>A key is always visible; its value is masked until you reveal it, one at a time, and auto-hides after
-        30&nbsp;seconds or on focus loss. Even unparseable lines are masked — a malformed line is as likely as any
-        to hold a secret.</p>
+        <h3>Masking</h3>
+        <p>Keys are always visible; values are masked until you reveal one, one at a time, and auto-hide after 30&nbsp;seconds or on focus loss. Masking is structural — even unparseable lines are masked.</p>
       </div>
       <div class="card">
-        <h3>A sandboxed UI that never sees more than it must</h3>
-        <p>The webview is restricted to the app&rsquo;s own commands (CSP <code>default-src 'self'</code>). Values
-        cross into the UI only on explicit per-value reveal; single-value copies never transit it. No command takes
-        a filesystem path from the webview — dropped files are read in Rust, and store imports are keyed by an
-        opaque token minted when you pick the file.</p>
+        <h3>Sandboxed UI</h3>
+        <p>The webview is sandboxed to the app&rsquo;s own commands (CSP <code>default-src 'self'</code>). Values reach it only on explicit reveal, and single-value copies bypass it entirely. No command takes a filesystem path from the webview — dropped files are read in Rust, and import targets resolve behind opaque tokens.</p>
       </div>
       <div class="card">
-        <h3>A clipboard that forgets</h3>
-        <p>Copies clear after 30&nbsp;seconds; on Windows they&rsquo;re also kept out of clipboard history (Win+V)
-        and the cloud clipboard. Linux has no such flag — a clipboard manager (Klipper, CopyQ, a GNOME extension)
-        keeps its own copy, so pause it or clear its history after copying a secret.</p>
+        <h3>Clipboard</h3>
+        <p>Copies clear after 30&nbsp;seconds and skip Windows clipboard history (Win+V) and the cloud clipboard. Linux has no such flag — a clipboard manager (Klipper, CopyQ) keeps its own copy, so clear it after copying a secret.</p>
       </div>
       <div class="card">
-        <h3>Concentration, mitigated</h3>
-        <p>Envarsa does concentrate values into one file — a trade made explicit and defended with masking, atomic
-        saves with a backup, and opt-in passphrase encryption at rest.</p>
+        <h3>One file, by design</h3>
+        <p>Everything in one file is the point — and the reason for atomic backups and opt-in <code>age</code> encryption at rest.</p>
       </div>
       <div class="card">
-        <h3>The network surface: one opt-in update check</h3>
-        <p>Out of the box, no network calls. The one exception is the update check, <strong>off by default</strong>:
-        a GET to <code>api.github.com</code> for the latest release tag. The reply is untrusted input — only a
-        semver-validated version is used — and nothing downloads or installs itself. One module, the app&rsquo;s
-        entire network surface.</p>
+        <h3>Network: one opt-in update check</h3>
+        <p>No network calls by default. The only exception is the update check, <strong>off by default</strong>: a GET to <code>api.github.com</code> for the latest release tag, validated as semver, with nothing auto-downloaded. One module — the app&rsquo;s entire network surface.</p>
       </div>
     </div>
   </section>
@@ -730,7 +699,7 @@ $ age -d envarsa.store &gt; store.json</code></pre>
   <section id="faq" class="faq" aria-labelledby="faq-h">
     <div class="container">
       <p class="kicker"># faq</p>
-      <h2 id="faq-h">Questions, answered plainly</h2>
+      <h2 id="faq-h">Frequently asked questions</h2>
       <details>
         <summary>Does Envarsa send my values anywhere?</summary>
         <p>No. Your values live in one file on your disk and never leave unless you export them yourself. The
@@ -862,7 +831,7 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         <a href="https://github.com/terminalis/envarsa/issues" rel="noopener">Issues</a>
       </nav>
     </div>
-    <p class="foot-tag"># no cloud · no telemetry · no egress by default — the files never leave</p>
+    <p class="foot-tag"># no cloud · no telemetry · no egress by default</p>
   </div>
 </footer>
 
