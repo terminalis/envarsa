@@ -23,6 +23,19 @@ const BETA_RAW = [
   '',
 ].join('\n');
 
+// Chosen so serialize_lines(parse(WRITE_RAW)) === WRITE_RAW (all values
+// are unquoted-safe), making fresh-write assert on exact bytes.
+const WRITE_RAW = [
+  '# App',
+  'PORT=3000',
+  'export REGION=eu-west-1',
+  '',
+  '# Secrets',
+  'API_KEY=real-secret',
+  'TOKEN=t0ken',
+  '',
+].join('\n');
+
 export async function runSelftest() {
   const results = [];
   const step = async (name, fn) => {
@@ -57,6 +70,7 @@ export async function runSelftest() {
 
   let alpha = null;
   let beta = null;
+  let writeProj = null;
   let storeDir = '';
   let sep = '/'; // the store path's own separator: '\' on Windows, '/' on Linux
 
@@ -392,6 +406,124 @@ export async function runSelftest() {
       refused = String(e).includes('selftest');
     }
     assert(refused, 'check_for_updates must be refused under ENVARSA_SELFTEST');
+  });
+
+  const ENV_LOCAL = () => `${storeDir}${sep}.env.local`;
+
+  await step('write .env.local: fresh write equals the re-serialized snapshot', async () => {
+    writeProj = await api.capture({
+      projectId: null, projectName: 'selftest-write', pathHint: null,
+      text: WRITE_RAW, sourcePath: null,
+    });
+    const token = await api.selftest.stageWrite(ENV_LOCAL());
+    const path = await api.writeEnvLocal(writeProj.projectId, writeProj.snapshotId, token, 'fresh');
+    assertEq(await api.selftest.readFile(path), WRITE_RAW, 'fresh .env.local bytes');
+  });
+
+  await step('write .env.local: overwrite replaces with the chosen snapshot', async () => {
+    const v2 = await api.capture({
+      projectId: writeProj.projectId, projectName: null, pathHint: null,
+      text: 'ONLY=now\n', sourcePath: null,
+    });
+    const token = await api.selftest.stageWrite(ENV_LOCAL());
+    await api.writeEnvLocal(writeProj.projectId, v2.snapshotId, token, 'overwrite');
+    assertEq(await api.selftest.readFile(ENV_LOCAL()), 'ONLY=now\n', 'overwrite bytes');
+  });
+
+  await step('write .env.local: merge keeps local-only keys and updates shared ones', async () => {
+    // Lay down an on-disk .env.local with a local-only key + a stale shared value.
+    const seed = await api.capture({
+      projectId: null, projectName: 'selftest-seed', pathHint: null,
+      text: '# local\nLOCAL_ONLY=keepme\nPORT=oldport\n', sourcePath: null,
+    });
+    await api.selftest.exportToPath(seed.projectId, seed.snapshotId, ENV_LOCAL());
+
+    // Merge the project's first snapshot (WRITE_RAW) into it.
+    const token = await api.selftest.stageWrite(ENV_LOCAL());
+    await api.writeEnvLocal(writeProj.projectId, writeProj.snapshotId, token, 'merge');
+    const read = await api.selftest.readFile(ENV_LOCAL());
+    assert(read.includes('LOCAL_ONLY=keepme'), 'local-only key kept');
+    assert(read.includes('PORT=3000') && !read.includes('oldport'), 'shared key updated');
+    assert(read.includes('# Added by Envarsa'), 'attribution header for appended keys');
+    assert(read.includes('API_KEY=real-secret'), 'source-only key appended');
+    await api.deleteProject(seed.projectId);
+  });
+
+  await step('write .env.local: example scaffold fills values, blanks placeholders, never leaks', async () => {
+    const template = '# API config\nAPI_KEY=put-your-key-here\nPORT=8080\nUNUSED=placeholder-value\n';
+    const token = await api.selftest.stageExample(ENV_LOCAL(), template);
+    await api.writeExampleScaffold(writeProj.projectId, writeProj.snapshotId, token);
+    const read = await api.selftest.readFile(ENV_LOCAL());
+    assert(read.includes('# API config'), 'example comment kept');
+    assert(read.includes('API_KEY=real-secret'), 'matched key filled with the real value');
+    assert(read.includes('PORT=3000'), 'matched key filled');
+    assert(read.includes('UNUSED=\n'), 'unmatched placeholder blanked to KEY=');
+    assert(!read.includes('put-your-key-here') && !read.includes('placeholder-value'), 'placeholders never leak');
+    assert(read.includes('# Added by Envarsa') && read.includes('REGION=eu-west-1'), 'source-only keys appended');
+  });
+
+  await step('write .env.local: example and non-local targets are refused', async () => {
+    for (const name of ['.env.example', '.env.local.bak', 'notes.txt']) {
+      const token = await api.selftest.stageWrite(`${storeDir}${sep}${name}`);
+      let threw = false, msg = '';
+      try {
+        await api.writeEnvLocal(writeProj.projectId, writeProj.snapshotId, token, 'fresh');
+      } catch (e) { threw = true; msg = String(e); }
+      assert(threw, `writing ${name} must be refused`);
+      if (name === '.env.example') {
+        assert(msg.toLowerCase().includes('example'), `example refusal names it, got: ${msg}`);
+      }
+    }
+  });
+
+  await step('editor: edit lines saves a new snapshot and keeps history', async () => {
+    const before = await api.getProject(writeProj.projectId);
+    const histBefore = before.snapshots.length;
+    const lines = await api.editLines(writeProj.projectId, writeProj.snapshotId); // WRITE_RAW
+    const edited = lines
+      .filter((l) => !(l.kind === 'entry' && l.key === 'TOKEN'))
+      .map((l) => (l.kind === 'entry' && l.key === 'PORT' ? { ...l, value: '4000' } : l));
+    edited.push({ kind: 'entry', key: 'NEW_KEY', value: 'added-by-editor', exported: false });
+    await api.saveEditedSnapshot({ projectId: writeProj.projectId, projectName: null, pathHint: null, lines: edited });
+
+    const after = await api.getProject(writeProj.projectId);
+    assertEq(after.snapshots.length, histBefore + 1, 'a new snapshot was added');
+    assertEq(after.via, 'edit', 'newest snapshot is via edit');
+    const portIdx = after.lines.find((l) => l.t === 'entry' && l.key === 'PORT').idx;
+    assertEq((await api.revealValue(after.id, after.snapshotId, portIdx)).value, '4000', 'edited value');
+    const newIdx = after.lines.find((l) => l.t === 'entry' && l.key === 'NEW_KEY').idx;
+    assertEq((await api.revealValue(after.id, after.snapshotId, newIdx)).value, 'added-by-editor', 'new key value');
+    assert(!after.lines.some((l) => l.t === 'entry' && l.key === 'TOKEN'), 'deleted key is gone');
+    const old = await api.getProject(writeProj.projectId, writeProj.snapshotId);
+    assert(old.lines.some((l) => l.t === 'entry' && l.key === 'TOKEN'), 'old snapshot still intact');
+  });
+
+  await step('editor: invalid keys are refused; a project can be built store-only', async () => {
+    let threw = false;
+    try {
+      await api.saveEditedSnapshot({
+        projectId: writeProj.projectId, projectName: null, pathHint: null,
+        lines: [{ kind: 'entry', key: 'A B', value: '1', exported: false }],
+      });
+    } catch (e) { threw = String(e).includes('valid key'); }
+    assert(threw, 'a key with a space must be refused');
+
+    // No file in, no file out: a comment + two entries straight into the store.
+    const res = await api.saveEditedSnapshot({
+      projectId: null, projectName: 'selftest-cloud', pathHint: null,
+      lines: [
+        { kind: 'comment', text: '# cloud-only project' },
+        { kind: 'entry', key: 'SERVICE_URL', value: 'https://api.example.com', exported: false },
+        { kind: 'entry', key: 'SERVICE_TOKEN', value: 'tok_123', exported: false },
+      ],
+    });
+    assertEq(res.entryCount, 2, 'two entries stored');
+    const cloud = (await api.listProjects()).find((p) => p.name === 'selftest-cloud');
+    assert(cloud && cloud.entryCount === 2, 'cloud project present with 2 entries');
+    const v = await api.getProject(cloud.id);
+    assert(v.lines.some((l) => l.t === 'comment'), 'comment preserved in the store');
+    const tIdx = v.lines.find((l) => l.t === 'entry' && l.key === 'SERVICE_TOKEN').idx;
+    assertEq((await api.revealValue(v.id, v.snapshotId, tIdx)).value, 'tok_123', 'stored value retrievable');
   });
 
   try {

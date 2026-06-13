@@ -1,12 +1,15 @@
 // Envarsa — a local-first library for your environment values.
-// Store-only librarian: it organizes, copies, and exports; it never
-// writes into project trees and never injects into processes.
+// Mostly a store-only librarian: it organizes, copies, and exports, and
+// never injects into processes. The one way it writes into a project
+// tree is an explicit, guarded export to a `.env*.local` file (never a
+// git-committed example file), always initiated by you.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
 mod crypto;
 mod envfile;
+mod envpath;
 mod state;
 mod store;
 mod update;
@@ -43,6 +46,7 @@ fn main() {
                 env_override,
                 session,
                 pending_import: None,
+                pending_write: None,
             });
             // No-op unless the user opted in (Settings → About).
             update::maybe_spawn_auto_check(app.handle().clone());
@@ -75,6 +79,15 @@ fn main() {
             commands::export_to_path,
             commands::export_store,
             commands::export_store_to_path,
+            commands::stage_write_target,
+            commands::pick_write_target,
+            commands::preview_write,
+            commands::write_env_local,
+            commands::pick_example_file,
+            commands::preview_example_write,
+            commands::write_example_scaffold,
+            commands::edit_lines,
+            commands::save_edited_snapshot,
             commands::rename_project,
             commands::set_path_hint,
             commands::delete_project,
@@ -97,6 +110,8 @@ fn main() {
             commands::selftest_set_clipboard,
             commands::selftest_read_file,
             commands::selftest_stage_import,
+            commands::selftest_stage_write,
+            commands::selftest_stage_example,
             commands::selftest_done,
         ])
         .run(tauri::generate_context!())

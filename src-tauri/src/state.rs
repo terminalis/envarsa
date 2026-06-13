@@ -82,6 +82,17 @@ pub struct PendingImport {
     pub path: PathBuf,
 }
 
+/// A `.env*.local` write target the user is about to commit to. Like
+/// `PendingImport`, the path stays here on the Rust side — the write
+/// command takes only the token, so the webview never supplies a path.
+/// `template`, when set, is an imported `.env.example`'s text used as the
+/// scaffold for the merge; the example file itself is only ever read.
+pub struct PendingWrite {
+    pub token: String,
+    pub path: PathBuf,
+    pub template: Option<String>,
+}
+
 pub struct Inner {
     pub store_path: PathBuf,
     pub config_path: PathBuf,
@@ -93,6 +104,8 @@ pub struct Inner {
     pub session: Session,
     /// At most one import is in flight; a new pick replaces it.
     pub pending_import: Option<PendingImport>,
+    /// At most one `.env.local` write is staged; a new pick replaces it.
+    pub pending_write: Option<PendingWrite>,
 }
 
 #[derive(Default)]

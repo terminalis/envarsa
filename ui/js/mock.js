@@ -43,6 +43,30 @@ const effective = (lines) => {
   return map;
 };
 
+// minimal mirror of envfile::format_value / serialize_lines
+function formatValue(v) {
+  if (v === '') return '';
+  const matchedQuotes =
+    v.length >= 2 && ((v[0] === '"' && v.endsWith('"')) || (v[0] === "'" && v.endsWith("'")));
+  const safe = v.trim() === v && !v.includes(' #') && !/[\n\r\t]/.test(v) && !matchedQuotes;
+  if (safe) return v;
+  if (!v.includes("'") && !/[\n\r\t]/.test(v)) return `'${v}'`;
+  return (
+    '"' +
+    v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') +
+    '"'
+  );
+}
+const serializeLine = (l) =>
+  l.kind === 'blank' ? ''
+  : l.kind === 'comment' ? l.text
+  : l.kind === 'bad' ? l.raw
+  : `${l.exported ? 'export ' : ''}${l.key}=${formatValue(l.value)}`;
+const serializeLines = (lines) => lines.map((l) => serializeLine(l) + '\n').join('');
+
+// At most one .env.local write is staged at a time (mirrors pending_write).
+let writeStage = null;
+
 // --- fixture store ---------------------------------------------------
 const FIX = (name, hint, raws) => ({
   id: nid(),
@@ -205,6 +229,87 @@ const COMMANDS = {
   copy_block: ({ projectId, snapshotId }) => effective(parseEnv(snap(proj(projectId), snapshotId).raw)).size,
   export_snapshot: () => 'C:\\dev\\exported.env',
   export_to_path: () => {},
+
+  // --- write .env.local (no real filesystem; targets read as "fresh") ---
+  stage_write_target: ({ projectId, snapshotId }) => {
+    const p = proj(projectId);
+    const s = snapshotId ? snap(p, snapshotId) : latest(p);
+    const dir = (s.sourcePath ? s.sourcePath.replace(/[\\/][^\\/]+$/, '') : p.pathHint) || 'C:\\dev\\project';
+    const path = `${dir}\\.env.local`;
+    writeStage = { token: 'mock-write-token', path, template: null };
+    return { token: writeStage.token, path, dir, class: 'writable', exists: false };
+  },
+  pick_write_target: ({ suggestedDir }) => {
+    const dir = suggestedDir || 'C:\\dev\\project';
+    const path = `${dir}\\.env.local`;
+    writeStage = { token: 'mock-write-token', path, template: null };
+    return { token: writeStage.token, path, dir, class: 'writable', exists: false };
+  },
+  preview_write: ({ projectId, snapshotId }) => {
+    const p = proj(projectId);
+    const s = snapshotId ? snap(p, snapshotId) : latest(p);
+    const source = [...effective(parseEnv(s.raw)).keys()];
+    return { resultEntryCount: source.length, added: source, substituted: [], emptied: [], kept: [], blocked: null, mode: 'fresh' };
+  },
+  write_env_local: () => (writeStage?.path || 'C:\\dev\\project\\.env.local'),
+  pick_example_file: () => {
+    const dir = 'C:\\dev\\project';
+    writeStage = { token: 'mock-example-token', path: `${dir}\\.env.local`, template: '# API\nAPI_KEY=your-key-here\nPORT=3000\n' };
+    return {
+      token: writeStage.token,
+      exampleName: '.env.example',
+      outPath: writeStage.path,
+      outClass: 'writable',
+      outExists: false,
+      exampleKeys: ['API_KEY', 'PORT'],
+      exampleComments: 1,
+    };
+  },
+  preview_example_write: ({ projectId, snapshotId }) => {
+    const p = proj(projectId);
+    const s = snapshotId ? snap(p, snapshotId) : latest(p);
+    const source = effective(parseEnv(s.raw));
+    const tplKeys = [...effective(parseEnv(writeStage?.template || '')).keys()];
+    const substituted = tplKeys.filter((k) => source.has(k));
+    const emptied = tplKeys.filter((k) => !source.has(k));
+    const added = [...source.keys()].filter((k) => !tplKeys.includes(k));
+    return { resultEntryCount: tplKeys.length + added.length, added, substituted, emptied, kept: [], blocked: null, mode: 'example' };
+  },
+  write_example_scaffold: () => (writeStage?.path || 'C:\\dev\\project\\.env.local'),
+
+  // --- structured editor ---
+  edit_lines: ({ projectId, snapshotId }) => {
+    const p = proj(projectId);
+    const s = snapshotId ? snap(p, snapshotId) : latest(p);
+    return parseEnv(s.raw).map((l) =>
+      l.t === 'entry' ? { kind: 'entry', key: l.key, value: l.value, exported: l.exported }
+      : l.t === 'comment' ? { kind: 'comment', text: l.text }
+      : l.t === 'bad' ? { kind: 'bad', raw: l.raw }
+      : { kind: 'blank' });
+  },
+  save_edited_snapshot: ({ args }) => {
+    for (const l of args.lines) {
+      if (l.kind === 'entry') {
+        const k = (l.key || '').trim();
+        if (!k || /[\s#"']/.test(k)) raise(`"${l.key}" is not a valid key — keys can't be empty or contain spaces, #, ", or '`);
+      }
+    }
+    const norm = args.lines.map((l) =>
+      l.kind === 'comment'
+        ? { ...l, text: l.text.trim().startsWith('#') ? l.text.trim() : `# ${l.text.trim()}` }
+        : l);
+    const raw = serializeLines(norm);
+    let p = args.projectId ? proj(args.projectId)
+      : DB.projects.find((x) => x.name.toLowerCase() === (args.projectName || '').trim().toLowerCase());
+    if (!p) {
+      p = { id: nid(), name: (args.projectName || '').trim(), pathHint: args.pathHint || null, createdAt: now(), snapshots: [] };
+      DB.projects.push(p);
+    }
+    if (args.pathHint) p.pathHint = args.pathHint;
+    const snapshot = { id: nid(), capturedAt: now(), via: 'edit', sourcePath: null, raw };
+    p.snapshots.push(snapshot);
+    return { projectId: p.id, snapshotId: snapshot.id, entryCount: effective(parseEnv(raw)).size };
+  },
   rename_project: ({ projectId, name }) => {
     if (DB.projects.some((p) => p.id !== projectId && p.name.toLowerCase() === name.trim().toLowerCase()))
       raise(`a project named "${name}" already exists`);
