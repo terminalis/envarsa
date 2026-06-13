@@ -44,12 +44,18 @@ Three things to know up front:
 
 ## What it is
 
-Envarsa is a **store-only librarian**:
+Envarsa is a **local-first librarian**:
 
-- It **organizes, copies, and exports**. It never writes into a project tree and never injects
-  variables into processes. "Use these values" always means *you* place them.
-- **Capture is manual.** A snapshot is a moment in time; re-capture to update. Envarsa never
-  watches project files for drift.
+- It **organizes, copies, and exports**, and never injects variables into processes. The one
+  way it writes into a project tree is an explicit, guarded export to a `.env*.local` file
+  (never a git-committed example file like `.env.example`, where secrets would leak) — always
+  initiated by you, on a path you choose.
+- **Build values without a file.** Capture from a `.env`, paste them, or type them into the
+  **structured editor** (keeping `#` comments) — a project always lives in the store, even when
+  you never import or export a file. Import a `.env.example` for its comments and key labels,
+  then write a `.env.local` beside it with your values filled in.
+- **Capture is manual.** A snapshot is a moment in time; re-capture or edit to update. Envarsa
+  never watches project files for drift.
 - **A project's identity is its name**, chosen by you. Any stored path is a non-binding hint —
   nothing rebinds by path across machines.
 - **Masking is structural, not heuristic.** An entry is an env var: its label (the key) is always
@@ -87,7 +93,9 @@ Location: `%APPDATA%\com.envarsa.app\envarsa.store` by default
 ## Core loop
 
 1. **Capture** — import a `.env` via file picker, paste, or drop the file on the window.
-   Comments, blank lines, and even unparseable lines are kept byte-for-byte.
+   Comments, blank lines, and even unparseable lines are kept byte-for-byte. No file? Build the
+   project by hand in the **structured editor** instead (step 6) — either way a project lives in
+   the store from the start.
 2. **Recall** — find the project, see keys, comments, history. Duplicate keys are tagged
    `overridden`; shared keys carry a reuse badge.
 3. **Hand back** — copy one value (it goes core → clipboard without ever rendering on screen),
@@ -95,8 +103,29 @@ Location: `%APPDATA%\com.envarsa.app\envarsa.store` by default
    what was captured. On Windows, copies are marked to stay out of the clipboard history (Win+V)
    and the cross-device cloud clipboard — Linux has no such flag (see the security note) — and
    Envarsa clears the clipboard after 30 seconds if it still holds what was copied.
-4. **History** — every capture appends a snapshot. View older ones read-only, or bring one back
-   as latest.
+4. **History** — every capture or save appends a snapshot. View older ones read-only, or bring
+   one back as latest.
+5. **Write a `.env.local`** — when you want the snapshot on disk, write it into a `.env*.local`,
+   either at its remembered source directory or a folder you pick. **Merge** keeps the target's
+   own comments, blank lines, and keys the snapshot doesn't provide (source-only keys are appended
+   under `# Added by Envarsa`); **fresh** (overwrite) replaces the file with the snapshot's current
+   values, re-serialized with minimal quoting — a needlessly-quoted `"plain-text"` comes back as a
+   bare `plain-text`. A preview counts what will be added, updated, kept, or blanked before any
+   byte is written. Or point Envarsa at a `.env.example`: it reads the file for its comments and
+   key labels (never writes to it) and scaffolds a `.env.local` beside it, **blanking** any key the
+   snapshot can't fill to `KEY=` so placeholders like `changeme` and `3000` never leak in. The
+   write is atomic — temp file, rename — and leaves **no `.bak` in your project tree** (backups
+   exist only for Envarsa's own store file). Only `.env*.local` paths are writable: the guard
+   (`classify_name` in `envpath.rs`) blocks any `example`/`sample`/`template`/`dist` segment
+   outright (those markers win even over a `.local` suffix), since they're committed and would leak
+   secrets into git history. The target path is resolved and staged in Rust behind an opaque token —
+   it never originates in or returns to the webview. Writing requires an unlocked store.
+6. **Build or edit by hand** — a project can live in the store with no file at all. Open the
+   **structured editor** empty, add keys, values, and `#` comments in a form, name it, and save —
+   the result is a store-only snapshot (`via=edit`, no source path). Load an existing snapshot to
+   change entries, toggle the `export` prefix, or add comments, then save as a new snapshot; the
+   old one stays in history. Keys are validated before the snapshot is created — no empty keys, no
+   whitespace, `#`, or quotes — and you're told why if one is rejected.
 
 ## Security posture, honestly
 
@@ -165,8 +194,9 @@ $env:ENVARSA_STORE_PATH="$env:TEMP\st.envarsa"  # capture/reveal/copy/export/
 
 ```
 ui/            no-build frontend (ES modules, withGlobalTauri; mock.js = browser-preview stub)
-src-tauri/     Rust core: envfile.rs (parse), store.rs (atomic persistence),
-               crypto.rs (age), commands.rs (the entire IPC surface), state.rs (session)
+src-tauri/     Rust core: envfile.rs (parse + serialize + merge), envpath.rs (.env*.local
+               write guard), store.rs (atomic persistence), crypto.rs (age),
+               commands.rs (the entire IPC surface), state.rs (session)
 ```
 
 ## License
