@@ -70,6 +70,7 @@ export function railView(S) {
 <div class="rail-head">
   <div class="brand">${brandMark(24)}<span class="brand-name">Envarsa</span></div>
   <button class="btn btn-accent btn-block" data-act="open-capture"><span class="btn-ic">${ICONS.plus}</span>Capture</button>
+  <button class="btn btn-block" data-act="open-editor-new" title="Create a project by hand — type variables and comments, kept in the store; no .env file needed"><span class="btn-ic">${ICONS.pencil}</span>New by hand</button>
 </div>
 <div class="rail-filter">
   <input id="filter-projects" type="search" placeholder="Filter projects" data-input="filter-projects" value="${esc(S.filterProjects)}" autocomplete="off" spellcheck="false">
@@ -180,7 +181,7 @@ export function sheetView(S) {
   <h2>Your env values, under one roof</h2>
   <p>Capture a project's .env as a point-in-time snapshot. Envarsa keeps it durable, masked,<br>and ready to hand back — by copy or export — whenever you need it again.</p>
   <button class="btn btn-accent btn-lg" data-act="open-capture"><span class="btn-ic">${ICONS.plus}</span>Capture your first project</button>
-  <p class="hero-hint">…or drop a .env file anywhere in this window.</p>
+  <p class="hero-hint">…or drop a .env file anywhere in this window, or <button class="link-btn" data-act="open-editor-new">build one by hand</button>.</p>
 </div>`;
   }
   const v = S.view;
@@ -206,7 +207,9 @@ export function sheetView(S) {
     <span class="spacer"></span>
     <button class="btn" data-act="recapture" title="Capture a fresh snapshot to replace this one — the current snapshot stays in history"><span class="btn-ic">${ICONS.refresh}</span>Re-capture</button>
     <button class="btn" data-act="copy-block" title="Copy this snapshot to the clipboard, exactly as captured — cleared after 30s"><span class="btn-ic">${ICONS.copy}</span>Copy block</button>
+    <button class="btn" data-act="open-editor" title="Edit this snapshot's variables — saves as a new snapshot; the current one stays in history"><span class="btn-ic">${ICONS.pencil}</span>Edit values</button>
     <button class="btn" data-act="export" title="Save this snapshot as a .env file — you choose where"><span class="btn-ic">${ICONS.download}</span>Export</button>
+    <button class="btn" data-act="open-write" title="Write these values into a .env.local in your project (never a .env.example)"><span class="btn-ic">${ICONS.download}</span>Write .env.local</button>
     <button class="icon-btn danger" data-act="open-delete" title="Delete project from the library">${ICONS.trash}</button>
   </div>
   <div class="sub-row">
@@ -391,7 +394,7 @@ function settingsModal(S, m) {
     </section>
     <section>
       <h3>About</h3>
-      <p class="muted">Envarsa ${esc(st.appVersion)} — a local-first library for your environment values. Store-only by design: it copies and exports, but never writes into project trees and never injects into processes. No cloud, no telemetry — the only thing that ever leaves is an update check you trigger or opt into below: one request to GitHub for the latest release number.</p>
+      <p class="muted">Envarsa ${esc(st.appVersion)} — a local-first library for your environment values. It copies and exports, and never injects into processes; the one way it writes into a project tree is an explicit, guarded export to a <span class="mono">.env*.local</span> (never a committed example file). No cloud, no telemetry — the only thing that ever leaves is an update check you trigger or opt into below: one request to GitHub for the latest release number.</p>
       <div class="settings-actions">
         <button class="btn" data-act="check-updates"${m.updChecking ? ' disabled' : ''}>${m.updChecking ? 'Checking…' : 'Check for updates'}</button>
         ${st.updateAvailable ? `<button class="btn btn-accent" data-act="open-releases">Get ${esc(st.updateAvailable)} from GitHub</button>` : ''}
@@ -625,6 +628,166 @@ function deleteModal(S, m) {
 </div>`;
 }
 
+// --------------------------------------------------------- write .env.local
+
+function writeClassBadge(cls) {
+  if (cls === 'writable') return '<span class="tag tag-ok">writable</span>';
+  return `<span class="tag tag-bad">${esc(cls === 'example' ? 'example file — blocked' : 'not .env.local — blocked')}</span>`;
+}
+
+// Counts + key chips for a write/merge preview. Names only — no values.
+export function writePreviewView(p) {
+  if (!p) return '<span class="muted">…</span>';
+  if (p.blocked) return `<span class="warn">${esc(p.blocked)}</span>`;
+  const bits = [`<strong>${p.resultEntryCount}</strong> ${p.resultEntryCount === 1 ? 'entry' : 'entries'}`];
+  if (p.substituted.length) bits.push(`updates ${p.substituted.length}`);
+  if (p.kept.length) bits.push(`keeps ${p.kept.length}`);
+  if (p.emptied.length) bits.push(`blanks ${p.emptied.length}`);
+  // For fresh/overwrite every key is "added"; resultEntryCount already says it.
+  if (p.added.length && p.mode !== 'fresh' && p.mode !== 'overwrite') bits.push(`adds ${p.added.length}`);
+  return bits.join(' <span class="dot">·</span> ');
+}
+
+function writeModal(S, m) {
+  const head = `
+<header class="modal-head">
+  <h2>Write .env.local</h2>
+  <button class="icon-btn" data-act="close-modal" title="Close">${ICONS.x}</button>
+</header>
+<div class="seg">
+  <button class="seg-btn${m.tab === 'target' ? ' on' : ''}" data-act="write-tab-target">To a .env.local</button>
+  <button class="seg-btn${m.tab === 'example' ? ' on' : ''}" data-act="write-tab-example">From a .env.example</button>
+</div>`;
+
+  if (m.tab === 'example') {
+    const ex = m.example;
+    const body = ex
+      ? `
+<p class="muted">Filling <span class="mono">${esc(ex.exampleName)}</span>’s comments and keys with this project’s values, written beside it:</p>
+<p class="mono settings-path" title="${esc(ex.outPath)}">${esc(ex.outPath)} ${writeClassBadge(ex.outClass)}</p>
+<div class="preview" id="write-preview">${writePreviewView(m.preview)}</div>`
+      : `<p class="muted">Pick a <span class="mono">.env.example</span> for its <span class="mono">#</span> comments and key labels. Envarsa fills in this project’s values and writes a <span class="mono">.env.local</span> next to it — the example file is only read, never written.</p>`;
+    const canWrite = ex && ex.outClass === 'writable' && !m.busy && !(m.preview && m.preview.blocked);
+    return `
+<div class="modal modal-write" role="dialog" aria-label="Write .env.local">
+  ${head}
+  ${body}
+  <footer class="modal-foot">
+    <button class="btn" data-act="write-pick-example">${ex ? 'Choose a different example…' : 'Choose .env.example…'}</button>
+    <span class="spacer"></span>
+    <button class="btn" data-act="close-modal">Cancel</button>
+    ${ex ? `<button class="btn btn-accent" data-act="write-example-confirm"${canWrite ? '' : ' disabled'}>${m.busy ? 'Writing…' : 'Write .env.local'}</button>` : ''}
+  </footer>
+</div>`;
+  }
+
+  if (!m.token) {
+    return `
+<div class="modal modal-write" role="dialog" aria-label="Write .env.local">
+  ${head}
+  <p class="muted">This project has no remembered folder. Choose where to write its <span class="mono">.env.local</span> — Envarsa only writes to a <span class="mono">.env*.local</span>, never a committed example file.</p>
+  <footer class="modal-foot">
+    <button class="btn btn-accent" data-act="write-change-location">Choose location…</button>
+    <span class="spacer"></span>
+    <button class="btn" data-act="close-modal">Cancel</button>
+  </footer>
+</div>`;
+  }
+
+  const modeSeg = m.exists
+    ? `
+<div class="seg">
+  <button class="seg-btn${m.mode === 'merge' ? ' on' : ''}" data-act="write-mode-merge">Merge</button>
+  <button class="seg-btn${m.mode === 'overwrite' ? ' on' : ''}" data-act="write-mode-overwrite">Overwrite</button>
+</div>
+<p class="hint">${m.mode === 'merge'
+        ? 'Keeps the file’s own comments and any keys it has that this project doesn’t; updates the rest.'
+        : 'Replaces the file’s contents with this project’s current values.'}</p>`
+    : '<p class="hint">This file doesn’t exist yet — it will be created.</p>';
+  const canWrite = m.class === 'writable' && !m.busy && !(m.preview && m.preview.blocked);
+  return `
+<div class="modal modal-write" role="dialog" aria-label="Write .env.local">
+  ${head}
+  <p class="mono settings-path" title="${esc(m.path)}">${esc(m.path)} ${writeClassBadge(m.class)}</p>
+  ${modeSeg}
+  <div class="preview" id="write-preview">${writePreviewView(m.preview)}</div>
+  <footer class="modal-foot">
+    <button class="btn" data-act="write-change-location">Change location…</button>
+    <span class="spacer"></span>
+    <button class="btn" data-act="close-modal">Cancel</button>
+    <button class="btn btn-accent" data-act="write-confirm"${canWrite ? '' : ' disabled'}>${m.busy ? 'Writing…' : 'Write'}</button>
+  </footer>
+</div>`;
+}
+
+// ----------------------------------------------------------- editor
+
+function editorRowView(r, i) {
+  const del = `<button class="icon-btn" data-act="editor-del-row" data-idx="${i}" title="Remove line">${ICONS.x}</button>`;
+  if (r.kind === 'comment') {
+    return `
+<div class="editor-row editor-comment">
+  <input class="mono" data-input="editor-comment" data-idx="${i}" value="${esc(r.text)}" placeholder="# comment" autocomplete="off" spellcheck="false">
+  ${del}
+</div>`;
+  }
+  if (r.kind === 'bad') {
+    return `
+<div class="editor-row editor-bad">
+  <span class="mono" title="Kept verbatim — not a KEY=value line">${esc(r.raw)}</span>
+  ${del}
+</div>`;
+  }
+  if (r.kind === 'blank') {
+    return `<div class="editor-row editor-blank"><span class="muted">— blank line —</span>${del}</div>`;
+  }
+  return `
+<div class="editor-row editor-entry">
+  <input class="mono editor-key" data-input="editor-key" data-idx="${i}" value="${esc(r.key)}" placeholder="KEY" autocomplete="off" spellcheck="false">
+  <input class="mono editor-value" data-input="editor-value" data-idx="${i}" value="${esc(r.value)}" placeholder="value" autocomplete="off" spellcheck="false">
+  <label class="check editor-export" title="Write with an export prefix"><input type="checkbox" data-input="editor-export" data-idx="${i}"${r.exported ? ' checked' : ''}>export</label>
+  ${del}
+</div>`;
+}
+
+function editorModal(S, m) {
+  const nameField = m.isNew
+    ? `
+<div class="field">
+  <label for="editor-name">Project</label>
+  <input id="editor-name" data-input="editor-name" list="editor-project-names" value="${esc(m.projectName)}" placeholder="Project name" autocomplete="off" spellcheck="false">
+  <datalist id="editor-project-names">${S.projects.map((p) => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>
+</div>
+<div class="field">
+  <label for="editor-hint">Filepath <span class="muted">(optional)</span></label>
+  <input id="editor-hint" data-input="editor-hint" value="${esc(m.pathHint || '')}" placeholder="C:\\path\\to\\project" autocomplete="off" spellcheck="false">
+</div>`
+    : `<p class="muted">Editing <strong>${esc(m.projectName)}</strong> — saving adds a new snapshot; the current one stays in history.</p>`;
+
+  const rows = m.rows.map((r, i) => editorRowView(r, i)).join('')
+    || '<p class="muted editor-empty">No lines yet — add a variable or comment below.</p>';
+
+  return `
+<div class="modal modal-editor" role="dialog" aria-label="Edit variables">
+  <header class="modal-head">
+    <h2>${m.isNew ? 'New project by hand' : 'Edit values'}</h2>
+    <button class="icon-btn" data-act="close-modal" title="Close">${ICONS.x}</button>
+  </header>
+  ${nameField}
+  <div class="editor-rows">${rows}</div>
+  <div class="editor-tools">
+    <button class="btn btn-sm" data-act="editor-add-entry"><span class="btn-ic">${ICONS.plus}</span>Variable</button>
+    <button class="btn btn-sm" data-act="editor-add-comment"><span class="btn-ic">${ICONS.plus}</span>Comment</button>
+    <button class="btn btn-sm" data-act="editor-seed-example">From .env.example…</button>
+  </div>
+  <footer class="modal-foot">
+    <span class="modal-note">Kept in your library — nothing is written to disk unless you choose to.</span>
+    <button class="btn" data-act="close-modal">Cancel</button>
+    <button class="btn btn-accent" data-act="editor-save"${m.busy ? ' disabled' : ''}>${m.busy ? 'Saving…' : 'Save'}</button>
+  </footer>
+</div>`;
+}
+
 export function modalView(S) {
   const m = S.modal;
   if (!m) return '';
@@ -635,6 +798,8 @@ export function modalView(S) {
     : m.kind === 'import' ? importModal(S, m)
     : m.kind === 'edit' ? editModal(S, m)
     : m.kind === 'delete' ? deleteModal(S, m)
+    : m.kind === 'write' ? writeModal(S, m)
+    : m.kind === 'editor' ? editorModal(S, m)
     : '';
   return `<div class="modal-scrim" data-act="close-modal"></div>${inner}`;
 }

@@ -122,6 +122,167 @@ pub fn entry_count(raw: &str) -> usize {
     effective_entries(&parse(raw)).len()
 }
 
+// ----------------------------------------------------- serialization
+
+/// Re-serialize a value to the shortest token that `parse_value` maps
+/// back to exactly `v`. Only the parsed value is stored (the raw token
+/// is lost), so writing a value back out has to reconstruct its quoting.
+pub fn format_value(v: &str) -> String {
+    if v.is_empty() {
+        return String::new();
+    }
+    if unquoted_is_safe(v) {
+        return v.to_string();
+    }
+    // Single quotes are literal (no escapes), so they round-trip any
+    // value free of `'` and of newlines/tabs.
+    if !v.contains('\'') && !v.contains(['\n', '\r', '\t']) {
+        return format!("'{v}'");
+    }
+    // Double quotes with escapes — the only shape that can carry a `'`
+    // alongside newlines/tabs.
+    let mut out = String::with_capacity(v.len() + 2);
+    out.push('"');
+    for c in v.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            other => out.push(other),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Unquoted is faithful only when the parser would hand back `v`
+/// unchanged: it trims the token, cuts at an inline ` #`, and treats a
+/// matched surrounding quote pair as a quoted value.
+fn unquoted_is_safe(v: &str) -> bool {
+    if v.trim() != v {
+        return false; // leading/trailing whitespace would be trimmed off
+    }
+    if v.contains(" #") {
+        return false; // would be cut as an inline comment
+    }
+    if v.contains(['\n', '\r', '\t']) {
+        return false; // would break the line / not round-trip
+    }
+    let bytes = v.as_bytes();
+    if bytes.len() >= 2 {
+        let (first, last) = (bytes[0], bytes[bytes.len() - 1]);
+        if (first == b'"' && last == b'"') || (first == b'\'' && last == b'\'') {
+            return false; // parser would mistake it for a quoted value
+        }
+    }
+    true
+}
+
+/// One line, without the trailing newline.
+pub fn serialize_line(line: &Line) -> String {
+    match line {
+        Line::Blank => String::new(),
+        Line::Comment(text) => text.clone(),
+        Line::Bad(raw) => raw.clone(),
+        Line::Entry {
+            key,
+            value,
+            exported,
+        } => {
+            let prefix = if *exported { "export " } else { "" };
+            format!("{prefix}{key}={}", format_value(value))
+        }
+    }
+}
+
+/// Join lines with `\n` and terminate with a single trailing newline.
+/// An empty list serializes to the empty string.
+pub fn serialize_lines(lines: &[Line]) -> String {
+    let mut out = String::new();
+    for line in lines {
+        out.push_str(&serialize_line(line));
+        out.push('\n');
+    }
+    out
+}
+
+// ------------------------------------------------------------- merge
+
+/// What to do with a target key that the source has no value for.
+pub enum AbsentPolicy {
+    /// Become `KEY=` (blank) — for an example scaffold, so placeholder
+    /// secrets are never copied into the output.
+    EmptyOut,
+    /// Keep the target's own line — for merging into an existing
+    /// `.env.local` whose other keys are already real.
+    KeepTarget,
+}
+
+/// Merge effective `source` entries into a target's line structure:
+/// keep the target's comments, blanks, ordering, and each entry's
+/// `export`/casing; substitute values for keys the source has; apply
+/// `absent` to target keys the source lacks; then append source-only
+/// keys (source order) under one attribution comment.
+pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
+    use std::collections::{HashMap, HashSet};
+    let source_map: HashMap<&str, &str> =
+        source.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let mut used: HashSet<&str> = HashSet::new();
+
+    let mut out: Vec<Line> = Vec::with_capacity(target_lines.len() + source.len() + 2);
+    for line in target_lines {
+        match line {
+            Line::Entry {
+                key,
+                exported,
+                ..
+            } => {
+                if let Some(sv) = source_map.get(key.as_str()) {
+                    used.insert(key.as_str());
+                    out.push(Line::Entry {
+                        key: key.clone(),
+                        value: (*sv).to_string(),
+                        exported: *exported,
+                    });
+                } else {
+                    match absent {
+                        AbsentPolicy::EmptyOut => out.push(Line::Entry {
+                            key: key.clone(),
+                            value: String::new(),
+                            exported: *exported,
+                        }),
+                        AbsentPolicy::KeepTarget => out.push(line.clone()),
+                    }
+                }
+            }
+            other => out.push(other.clone()),
+        }
+    }
+
+    let extra: Vec<&(String, String)> = source
+        .iter()
+        .filter(|(k, _)| !used.contains(k.as_str()))
+        .collect();
+    if !extra.is_empty() {
+        // One blank separator unless the target already ended blank/empty.
+        if !matches!(out.last(), None | Some(Line::Blank)) {
+            out.push(Line::Blank);
+        }
+        out.push(Line::Comment("# Added by Envarsa".to_string()));
+        for (k, v) in extra {
+            out.push(Line::Entry {
+                key: k.clone(),
+                value: v.clone(),
+                exported: false,
+            });
+        }
+    }
+
+    serialize_lines(&out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +359,99 @@ mod tests {
         let eff = effective_entries(&lines);
         assert_eq!(eff, vec![("A".into(), "3".into()), ("B".into(), "2".into())]);
         assert_eq!(entry_count("A=1\nB=2\nA=3"), 2);
+    }
+
+    #[test]
+    fn format_value_round_trips() {
+        for v in [
+            "",
+            "3000",
+            "hello world",
+            "a # b",
+            " lead",
+            "trail ",
+            "with\"q",
+            "back\\slash",
+            "line\nbreak",
+            "tab\there",
+            "it's",
+            "url#frag",
+            "'foo'",
+            "\"already\"",
+        ] {
+            let token = format_value(v);
+            let lines = parse(&format!("K={token}"));
+            let got = match &lines[0] {
+                Line::Entry { value, .. } => value.clone(),
+                other => panic!("not an entry: {other:?} (token {token:?})"),
+            };
+            assert_eq!(got, v, "round-trip for {v:?} via token {token:?}");
+        }
+    }
+
+    #[test]
+    fn format_value_is_minimal() {
+        assert_eq!(format_value(""), "");
+        assert_eq!(format_value("3000"), "3000");
+        assert_eq!(format_value("hello world"), "hello world"); // interior space stays unquoted
+        assert_eq!(format_value("url#frag"), "url#frag"); // bare # without a leading space
+        assert_eq!(format_value("a # b"), "'a # b'");
+        assert_eq!(format_value(" lead"), "' lead'");
+    }
+
+    #[test]
+    fn serialize_line_is_verbatim_for_non_entries_and_honors_export() {
+        assert_eq!(serialize_line(&Line::Blank), "");
+        assert_eq!(serialize_line(&Line::Comment("# note".into())), "# note");
+        assert_eq!(serialize_line(&Line::Bad("Authorization: Bearer x".into())), "Authorization: Bearer x");
+        assert_eq!(
+            serialize_line(&Line::Entry { key: "R".into(), value: "eu".into(), exported: true }),
+            "export R=eu"
+        );
+    }
+
+    #[test]
+    fn serialize_lines_round_trips_a_simple_snapshot() {
+        let raw = "# App\nPORT=3000\nexport REGION=eu-west-1\n\n# Extra\nDEBUG=true\n";
+        assert_eq!(serialize_lines(&parse(raw)), raw);
+    }
+
+    #[test]
+    fn merge_empty_out_scaffold_blanks_placeholders() {
+        let example = parse("# header\nAPI_KEY=changeme\nPORT=3000\n");
+        let source = vec![("API_KEY".to_string(), "real-secret".to_string())];
+        let out = merge(&example, &source, AbsentPolicy::EmptyOut);
+        assert_eq!(out, "# header\nAPI_KEY=real-secret\nPORT=\n");
+        assert!(!out.contains("changeme"), "placeholder must not leak");
+        assert!(!out.contains("3000"), "unfilled placeholder must be blanked");
+    }
+
+    #[test]
+    fn merge_appends_source_only_keys_under_header() {
+        let example = parse("# header\nAPI_KEY=x\n");
+        let source = vec![
+            ("API_KEY".to_string(), "v".to_string()),
+            ("EXTRA".to_string(), "y".to_string()),
+        ];
+        let out = merge(&example, &source, AbsentPolicy::EmptyOut);
+        assert_eq!(out, "# header\nAPI_KEY=v\n\n# Added by Envarsa\nEXTRA=y\n");
+    }
+
+    #[test]
+    fn merge_keep_target_preserves_local_values_and_substitutes() {
+        let target = parse("# local\nA=keepme\nB=old\n");
+        let source = vec![
+            ("B".to_string(), "new".to_string()),
+            ("C".to_string(), "added".to_string()),
+        ];
+        let out = merge(&target, &source, AbsentPolicy::KeepTarget);
+        assert_eq!(out, "# local\nA=keepme\nB=new\n\n# Added by Envarsa\nC=added\n");
+    }
+
+    #[test]
+    fn merge_preserves_export_and_skips_header_when_no_extras() {
+        let target = parse("export TOKEN=old\n");
+        let source = vec![("TOKEN".to_string(), "new".to_string())];
+        assert_eq!(merge(&target, &source, AbsentPolicy::KeepTarget), "export TOKEN=new\n");
     }
 }

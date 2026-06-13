@@ -30,6 +30,20 @@ export const api = {
   copyBlock: (projectId, snapshotId) => invoke('copy_block', { projectId, snapshotId }),
   exportSnapshot: (projectId, snapshotId) => invoke('export_snapshot', { projectId, snapshotId }),
 
+  // Write a project's values out to a .env.local. The target path is
+  // staged Rust-side behind an opaque token; only the token comes back.
+  stageWriteTarget: (projectId, snapshotId) => invoke('stage_write_target', { projectId, snapshotId }),
+  pickWriteTarget: (suggestedDir = null) => invoke('pick_write_target', { suggestedDir }),
+  previewWrite: (projectId, snapshotId, token, mode) => invoke('preview_write', { projectId, snapshotId, token, mode }),
+  writeEnvLocal: (projectId, snapshotId, token, mode) => invoke('write_env_local', { projectId, snapshotId, token, mode }),
+  pickExampleFile: () => invoke('pick_example_file'),
+  previewExampleWrite: (projectId, snapshotId, token) => invoke('preview_example_write', { projectId, snapshotId, token }),
+  writeExampleScaffold: (projectId, snapshotId, token) => invoke('write_example_scaffold', { projectId, snapshotId, token }),
+
+  // Structured editor: seed from a snapshot, save back as a new one.
+  editLines: (projectId, snapshotId = null) => invoke('edit_lines', { projectId, snapshotId }),
+  saveEditedSnapshot: (args) => invoke('save_edited_snapshot', { args }),
+
   renameProject: (projectId, name) => invoke('rename_project', { projectId, name }),
   setPathHint: (projectId, pathHint) => invoke('set_path_hint', { projectId, pathHint }),
   deleteProject: (projectId) => invoke('delete_project', { projectId }),
@@ -61,6 +75,8 @@ export const api = {
     setClipboard: (text) => invoke('selftest_set_clipboard', { text }),
     readFile: (path) => invoke('selftest_read_file', { path }),
     stageImport: (path) => invoke('selftest_stage_import', { path }),
+    stageWrite: (path) => invoke('selftest_stage_write', { path }),
+    stageExample: (outPath, template) => invoke('selftest_stage_example', { outPath, template }),
     exportToPath: (projectId, snapshotId, path) => invoke('export_to_path', { projectId, snapshotId, path }),
     exportStoreToPath: (path, passphrase = null) => invoke('export_store_to_path', { path, passphrase }),
     done: (passed, failed, report) => invoke('selftest_done', { passed, failed, report }),

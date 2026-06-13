@@ -284,9 +284,12 @@ pub fn backup_path(path: &Path) -> PathBuf {
     sibling(path, ".bak")
 }
 
-/// Durable write: temp file + fsync, back up the previous version,
-/// then rename over the target.
-pub fn write_store_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
+/// Durable write: create the parent dir if missing, write a temp file +
+/// fsync, then rename over the target. No backup — callers that want one
+/// make it before calling. Used both for the store and for the one place
+/// Envarsa writes into a project tree (a `.env*.local`), so a crash can
+/// never leave a torn file.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
             fs::create_dir_all(dir)
@@ -302,12 +305,18 @@ pub fn write_store_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
         f.sync_all()
             .map_err(|e| format!("could not flush temp file: {e}"))?;
     }
+    fs::rename(&tmp, path).map_err(|e| format!("could not replace {}: {e}", path.display()))?;
+    Ok(())
+}
+
+/// Durable store write: back up the previous version, then atomically
+/// replace the target.
+pub fn write_store_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if path.exists() {
         fs::copy(path, backup_path(path))
             .map_err(|e| format!("could not write backup: {e}"))?;
     }
-    fs::rename(&tmp, path).map_err(|e| format!("could not replace store file: {e}"))?;
-    Ok(())
+    write_atomic(path, bytes)
 }
 
 /// Serialize (and, when a passphrase is set, encrypt) the store, then

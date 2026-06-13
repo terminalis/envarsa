@@ -275,6 +275,37 @@ function updateImportDerived() {
   if (btn) btn.disabled = m.busy || plan.problems > 0 || plan.importing === 0;
 }
 
+// ----------------------------------------------------------- write .env.local
+
+// Recompute the write/merge preview (counts + key chips) without
+// re-rendering the modal, so seg/tab focus survives.
+async function refreshWritePreview() {
+  const m = S.modal;
+  if (m?.kind !== 'write') return;
+  const v = S.view;
+  try {
+    if (m.tab === 'example') {
+      m.preview = m.example
+        ? await api.previewExampleWrite(v.id, v.snapshotId, m.example.token)
+        : null;
+    } else {
+      m.preview = m.token ? await api.previewWrite(v.id, v.snapshotId, m.token, m.mode) : null;
+    }
+  } catch (e) {
+    m.preview = {
+      blocked: String(e?.message || e),
+      resultEntryCount: 0,
+      added: [],
+      substituted: [],
+      emptied: [],
+      kept: [],
+    };
+  }
+  if (S.modal !== m) return;
+  const box = $('#write-preview');
+  if (box) box.innerHTML = V.writePreviewView(m.preview);
+}
+
 // --------------------------------------------------------------- actions
 
 const ACTIONS = {
@@ -383,6 +414,198 @@ const ACTIONS = {
   export: run(async () => {
     const path = await api.exportSnapshot(S.view.id, S.view.snapshotId);
     if (path) toast('Exported snapshot', 'success', path);
+  }),
+
+  'open-write': run(async () => {
+    const v = S.view;
+    if (!v) return;
+    let t = null;
+    // No remembered directory is fine — the modal offers "Change location".
+    try {
+      t = await api.stageWriteTarget(v.id, v.snapshotId);
+    } catch {
+      t = null;
+    }
+    S.modal = {
+      kind: 'write',
+      tab: 'target',
+      token: t?.token || null,
+      path: t?.path || null,
+      class: t?.class || null,
+      exists: t?.exists || false,
+      dir: t?.dir || null,
+      mode: t?.exists ? 'merge' : 'fresh',
+      preview: null,
+      busy: false,
+      example: null,
+    };
+    renderModal();
+    if (t) refreshWritePreview();
+  }),
+  'write-tab-target': () => {
+    S.modal.tab = 'target';
+    renderModal();
+    if (S.modal.token) refreshWritePreview();
+  },
+  'write-tab-example': () => {
+    S.modal.tab = 'example';
+    renderModal();
+    if (S.modal.example) refreshWritePreview();
+  },
+  'write-mode-merge': () => {
+    S.modal.mode = 'merge';
+    renderModal();
+    refreshWritePreview();
+  },
+  'write-mode-overwrite': () => {
+    S.modal.mode = 'overwrite';
+    renderModal();
+    refreshWritePreview();
+  },
+  'write-change-location': run(async () => {
+    const m = S.modal;
+    if (m?.kind !== 'write') return;
+    const t = await api.pickWriteTarget(m.dir || null);
+    if (!t) return;
+    m.token = t.token;
+    m.path = t.path;
+    m.class = t.class;
+    m.exists = t.exists;
+    m.dir = t.dir;
+    if (!t.exists) m.mode = 'fresh';
+    else if (m.mode === 'fresh') m.mode = 'merge';
+    renderModal();
+    refreshWritePreview();
+  }),
+  'write-pick-example': run(async () => {
+    const m = S.modal;
+    if (m?.kind !== 'write') return;
+    const ex = await api.pickExampleFile();
+    if (!ex) return;
+    m.example = ex;
+    renderModal();
+    refreshWritePreview();
+  }),
+  'write-confirm': run(async () => {
+    const m = S.modal;
+    if (m?.kind !== 'write' || m.busy || !m.token) return;
+    m.busy = true;
+    renderModal();
+    try {
+      const path = await api.writeEnvLocal(S.view.id, S.view.snapshotId, m.token, m.mode);
+      S.modal = null;
+      renderModal();
+      toast('Wrote .env.local', 'success', path);
+    } finally {
+      if (S.modal?.kind === 'write') {
+        S.modal.busy = false;
+        renderModal();
+      }
+    }
+  }),
+  'write-example-confirm': run(async () => {
+    const m = S.modal;
+    if (m?.kind !== 'write' || m.busy || !m.example) return;
+    m.busy = true;
+    renderModal();
+    try {
+      const path = await api.writeExampleScaffold(S.view.id, S.view.snapshotId, m.example.token);
+      S.modal = null;
+      renderModal();
+      toast('Wrote .env.local from the example', 'success', path);
+    } finally {
+      if (S.modal?.kind === 'write') {
+        S.modal.busy = false;
+        renderModal();
+      }
+    }
+  }),
+
+  'open-editor': run(async () => {
+    const v = S.view;
+    if (!v) return;
+    const rows = await api.editLines(v.id, v.snapshotId);
+    S.modal = {
+      kind: 'editor',
+      isNew: false,
+      projectId: v.id,
+      projectName: v.name,
+      pathHint: v.pathHint || '',
+      rows,
+      busy: false,
+    };
+    renderModal();
+  }),
+  'open-editor-new': () => {
+    S.modal = {
+      kind: 'editor',
+      isNew: true,
+      projectId: null,
+      projectName: '',
+      pathHint: '',
+      rows: [{ kind: 'entry', key: '', value: '', exported: false }],
+      busy: false,
+    };
+    focusAfterRender = '#editor-name';
+    renderModal();
+  },
+  'editor-add-entry': () => {
+    S.modal.rows.push({ kind: 'entry', key: '', value: '', exported: false });
+    renderModal();
+  },
+  'editor-add-comment': () => {
+    S.modal.rows.push({ kind: 'comment', text: '# ' });
+    renderModal();
+  },
+  'editor-del-row': (d) => {
+    S.modal.rows.splice(Number(d.idx), 1);
+    renderModal();
+  },
+  'editor-seed-example': run(async () => {
+    const m = S.modal;
+    if (m?.kind !== 'editor') return;
+    const ex = await api.pickExampleFile();
+    if (!ex) return;
+    const existing = new Set(m.rows.filter((r) => r.kind === 'entry').map((r) => r.key));
+    const added = ex.exampleKeys
+      .filter((k) => !existing.has(k))
+      .map((k) => ({ kind: 'entry', key: k, value: '', exported: false }));
+    if (!added.length) {
+      toast('Those keys are already here');
+      return;
+    }
+    m.rows.push({ kind: 'comment', text: `# from ${ex.exampleName}` }, ...added);
+    renderModal();
+    toast(`Added ${added.length} ${added.length === 1 ? 'key' : 'keys'} from ${ex.exampleName}`);
+  }),
+  'editor-save': run(async () => {
+    const m = S.modal;
+    if (m?.kind !== 'editor' || m.busy) return;
+    if (m.isNew && !(m.projectName || '').trim()) {
+      toast('Give the project a name.', 'error');
+      focusAfterRender = '#editor-name';
+      renderModal();
+      return;
+    }
+    m.busy = true;
+    renderModal();
+    try {
+      const res = await api.saveEditedSnapshot({
+        projectId: m.projectId,
+        projectName: m.isNew ? m.projectName.trim() : null,
+        pathHint: m.isNew ? (m.pathHint || '').trim() || null : null,
+        lines: m.rows,
+      });
+      S.modal = null;
+      await loadProjects();
+      await selectProject(res.projectId);
+      toast(`Saved ${res.entryCount} ${res.entryCount === 1 ? 'entry' : 'entries'}`);
+    } finally {
+      if (S.modal?.kind === 'editor') {
+        S.modal.busy = false;
+        renderModal();
+      }
+    }
   }),
 
   'reuse-badge': (d, btn) => {
@@ -606,6 +829,25 @@ const INPUTS = {
     if (m?.kind !== 'import') return;
     m.decisions[Number(el.dataset.idx)].newName = value;
     updateImportDerived();
+  },
+  // Editor rows mutate in place — no re-render, so typing focus survives.
+  'editor-key': (value, el) => {
+    if (S.modal?.kind === 'editor') S.modal.rows[Number(el.dataset.idx)].key = value;
+  },
+  'editor-value': (value, el) => {
+    if (S.modal?.kind === 'editor') S.modal.rows[Number(el.dataset.idx)].value = value;
+  },
+  'editor-comment': (value, el) => {
+    if (S.modal?.kind === 'editor') S.modal.rows[Number(el.dataset.idx)].text = value;
+  },
+  'editor-export': (value, el) => {
+    if (S.modal?.kind === 'editor') S.modal.rows[Number(el.dataset.idx)].exported = el.checked;
+  },
+  'editor-name': (value) => {
+    if (S.modal?.kind === 'editor') S.modal.projectName = value;
+  },
+  'editor-hint': (value) => {
+    if (S.modal?.kind === 'editor') S.modal.pathHint = value;
   },
   'snapshot-select': (value) => {
     ACTIONS['_select-snapshot'](value);

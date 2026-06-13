@@ -16,7 +16,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Envarsa">
 <meta property="og:url" content="https://envarsa.dev/">
-<meta property="og:title" content="Envarsa — a local-first library for your environment values">
+<meta property="og:title" content="Envarsa — a local-first library for your environment variables">
 <meta property="og:description" content="Capture a project's .env as a point-in-time snapshot, recall it with values masked, hand values back by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check, off by default — no egress.">
 <meta property="og:image" content="https://envarsa.dev/screenshots/demo.png">
 <meta property="og:image:width" content="1136">
@@ -25,7 +25,7 @@
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Envarsa — a local-first library for your environment values">
+<meta name="twitter:title" content="Envarsa — a local-first library for your environment variables">
 <meta name="twitter:description" content="Capture .env snapshots, recall them masked, hand values back when you need them. Free, open source, Windows &amp; Linux. No cloud, no telemetry, no egress by default.">
 <meta name="twitter:image" content="https://envarsa.dev/screenshots/demo.png">
 
@@ -42,7 +42,7 @@
   "url": "https://envarsa.dev/",
   "downloadUrl": "https://github.com/terminalis/envarsa/releases/latest",
   "license": "https://github.com/terminalis/envarsa/blob/main/LICENSE",
-  "description": "A local-first library for your environment values. Capture a project's .env as a point-in-time snapshot, recall and inspect it with values masked, and hand values back out — by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check against GitHub, off by default — no egress.",
+  "description": "A local-first library for your environment variables. Capture a project's .env as a point-in-time snapshot, recall and inspect it with values masked, and hand values back out — by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check against GitHub, off by default — no egress.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "terminalis", "url": "https://github.com/terminalis" },
   "screenshot": [
@@ -55,6 +55,8 @@
     "Structural masking: keys always visible, values hidden until revealed one at a time",
     "Per-value clipboard copy that bypasses the screen and clears itself after 30 seconds",
     "Byte-identical .env export",
+    "Guarded write-back to a .env*.local you choose (merge or fresh), or scaffolded from a .env.example — never a committed example file",
+    "Build or edit a project by hand in a structured editor, with or without an .env file",
     "Snapshot history per project",
     "Cross-project key reuse detection — flagged, never linked",
     "One portable plaintext JSON store file with atomic saves and a one-step backup",
@@ -81,7 +83,7 @@
     {
       "@type": "Question",
       "name": "Does Envarsa write into my projects or inject environment variables?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Never. Envarsa is a store-only librarian: it organizes, copies, and exports, but it never writes into a project tree and never injects variables into processes. Using a value always means you place it." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Only when you ask. It never injects variables into processes, and by default Envarsa is a store-only librarian: it organizes, copies, and exports without writing into your project tree. The one exception is an explicit, user-initiated write to a .env*.local file on a path you choose — in merge or fresh mode, or scaffolded from a .env.example. A committed example file (.env.example, .sample, .template, .dist) is always refused, and the target path is resolved and guarded in Rust, never taken from the webview. Using a value always means you place it." }
     },
     {
       "@type": "Question",
@@ -462,7 +464,7 @@
   <section class="hero" aria-label="Introduction">
     <div class="container hero-grid">
       <div>
-        <h1><span class="accent">Envarsa</span> — a local-first library for your environment values.</h1>
+        <h1><span class="accent">Envarsa</span> — a local-first library for your environment variables.</h1>
         <p class="hero-sub">
           Env values scatter across projects and machines, get silently duplicated, and die with a disk.
           Envarsa gives them one home: <strong>capture</strong> a project&rsquo;s <code>.env</code> as a point-in-time
@@ -569,9 +571,10 @@
       <p class="kicker"># how it works</p>
       <h2 id="how-h">Capture, recall, hand back — a librarian&rsquo;s loop</h2>
       <p class="lede">
-        Envarsa is a <strong>store-only librarian</strong>. It organizes, copies, and exports — it never writes
-        into a project tree and never injects variables into processes. &ldquo;Use these values&rdquo; always
-        means <em>you</em> place them.
+        By default Envarsa is a <strong>store-only librarian</strong> — it organizes, copies, and exports without
+        touching your project tree, and it never injects variables into processes. When <em>you</em> ask, it writes
+        a <code>.env*.local</code> on a path you choose (never a committed example file). &ldquo;Use these
+        values&rdquo; always means <em>you</em> place them.
       </p>
       <div class="cards loop-grid">
         <div class="card">
@@ -596,6 +599,24 @@
           <h3><span class="num">04</span>History</h3>
           <p>Every capture appends a snapshot. View older ones read-only, or bring one back as latest. Yesterday&rsquo;s
           working configuration is a click away, not a memory exercise.</p>
+        </div>
+        <div class="card">
+          <h3><span class="num">05</span>Write a <code>.env.local</code></h3>
+          <p>When you do want a file back, write a snapshot to a <code>.env*.local</code> in a folder you pick —
+          <strong>merge</strong> to fill in keys while keeping the file&rsquo;s own comments and structure, or
+          <strong>fresh</strong> to replace it outright. A preview counts what will be added, updated, kept, or
+          blanked before a byte lands. Point it at a <code>.env.example</code> instead and Envarsa scaffolds a
+          <code>.env.local</code> beside it from the template&rsquo;s keys and comments — placeholders are blanked,
+          never copied. A committed example file is <strong>refused</strong>, every time: only a
+          <code>.env*.local</code> is ever writable.</p>
+        </div>
+        <div class="card">
+          <h3><span class="num">06</span>Build it by hand</h3>
+          <p>Or never touch a file at all. Open the <strong>structured editor</strong> with no import, type keys,
+          values, and <code>#</code> comments into a form, name it, and save — the project lives entirely in the
+          store. Edit a snapshot the same way and it saves as a <strong>new snapshot</strong>, the old one kept in
+          history. Keys are validated before the snapshot is created. A project is always yours in the store, with
+          or without a file on disk.</p>
         </div>
       </div>
     </div>
@@ -740,8 +761,12 @@ $ age -d envarsa.store &gt; store.json</code></pre>
       </details>
       <details>
         <summary>Does Envarsa write into my projects or inject environment variables?</summary>
-        <p>Never. It&rsquo;s a store-only librarian: it organizes, copies, and exports, but it never writes into a
-        project tree and never injects variables into processes. Using a value always means you place it.</p>
+        <p>Only when you ask. It never injects variables into processes, and by default it&rsquo;s a store-only
+        librarian: it organizes, copies, and exports without touching your tree. The one exception is an explicit,
+        user-initiated write — a <code>.env*.local</code> on a path you choose, in merge or fresh mode, or scaffolded
+        from a <code>.env.example</code>. A committed example file (<code>.env.example</code>, <code>.sample</code>,
+        <code>.template</code>, <code>.dist</code>) is always refused, and the path is resolved and guarded in Rust,
+        never taken from the webview. Using a value always means you place it.</p>
       </details>
       <details>
         <summary>Which platforms does it run on?</summary>
