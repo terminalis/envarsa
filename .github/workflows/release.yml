@@ -17,6 +17,10 @@
 # build host's glibc floor, so the older image keeps it runnable on Ubuntu
 # 22.04+, Debian 12+, and peers. Tauri's bundler pulls WebKitGTK and OpenSSL
 # into the AppImage; the .deb declares them as dependencies instead.
+#
+# When GitHub retires this runner image the floor moves with it: either pin the
+# Linux build to a 22.04 container to hold the floor, or accept the newer glibc
+# (which drops the older-distro support promised above and in the README).
 
 name: release
 

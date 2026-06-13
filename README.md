@@ -30,6 +30,9 @@ Grab an artifact from the
 - **Debian package** (`Envarsa_x.y.z_amd64.deb`) — `sudo apt install ./Envarsa_x.y.z_amd64.deb`;
   apt pulls the dependencies (WebKitGTK 4.1, libssl3) and adds the menu entry.
 
+If the window comes up blank on first launch, a few GPU/driver and Wayland combinations trip
+over WebKitGTK's DMABUF renderer — relaunch with `WEBKIT_DISABLE_DMABUF_RENDERER=1` set.
+
 Three things to know up front:
 
 - The Windows builds need the **WebView2 runtime** — preinstalled on Windows 11 and on any
