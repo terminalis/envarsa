@@ -17,3 +17,6 @@ devcert.pfx
 /wack-report.xml
 /wack-done.marker
 /wack-run.ps1
+
+# Microsoft Store submission working notes — local-only (this is a public repo)
+docs/store-listing.md
