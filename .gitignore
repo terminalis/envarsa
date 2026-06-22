@@ -20,3 +20,4 @@ devcert.pfx
 
 # Microsoft Store submission working notes — local-only (this is a public repo)
 docs/store-listing.md
+website/screenshots/store-*.png
