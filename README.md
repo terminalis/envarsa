@@ -4,7 +4,7 @@ A local-first store for your `.env` files. Capture a project's `.env` as a snaps
 masked, and hand them back by clipboard or export. Everything lives in one JSON file on disk — no cloud,
 no telemetry, no network calls except an opt-in update check (off by default).
 
-![Envarsa](screenshots/demo.png)
+![Envarsa](website/screenshots/demo.png)
 
 ## Install
 

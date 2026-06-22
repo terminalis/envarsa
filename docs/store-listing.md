@@ -81,7 +81,7 @@ Partner Center → your app → **Product management → Product identity**. Cop
 
 ## Required URLs
 
-- **Privacy policy (REQUIRED):** `https://envarsa.dev/privacy` — page is in the repo at `privacy/index.html`; publish it before submitting.
+- **Privacy policy (REQUIRED):** `https://envarsa.dev/privacy.html` — page is in the repo at `website/privacy.html`; publish it before submitting.
 - **Support / website:** `https://envarsa.dev`
 - **Support contact:** `https://github.com/terminalis/envarsa/issues`
 
@@ -89,7 +89,7 @@ Partner Center → your app → **Product management → Product identity**. Cop
 
 Answer **Yes** to the personal-data question and supply the privacy-policy URL. Envarsa itself
 collects nothing; the disclosure exists because the opt-in update check transmits the device IP
-and a `envarsa/<version>` User-Agent to GitHub. Keep the wording consistent with `privacy/index.html`.
+and a `envarsa/<version>` User-Agent to GitHub. Keep the wording consistent with `website/privacy.html`.
 
 ---
 
@@ -97,7 +97,7 @@ and a `envarsa/<version>` User-Agent to GitHub. Keep the wording consistent with
 
 Desktop screenshots must be **1366×768 or 1920×1080 PNG** (up to 9).
 
-⚠️ The existing `screenshots/*.png` are 1122×751 / 1136×759 — **below the 1366×768 minimum**.
+⚠️ The existing `website/screenshots/*.png` are 1122×751 / 1136×759 — **below the 1366×768 minimum**.
 Recapture at ≥ 1366×768 before submitting. Suggested shots: main window with masked values,
 the capture dialog, the by-hand editor, and Settings (encryption).
 

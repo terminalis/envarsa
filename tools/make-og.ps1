@@ -2,7 +2,7 @@
 # Mirrors tools/make-icon.ps1 — same vault-dark palette and key-bar / masked-dots
 # motif ("the mask IS the brand"). Left: the logo mark, "Envarsa" wordmark, the
 # tagline and a trust line. Right: a masked .env store panel. The result is saved
-# to brand/og-image.png and referenced by og:image / twitter:image in index.html.
+# to website/brand/og-image.png and referenced by og:image / twitter:image in website/index.html.
 Add-Type -AssemblyName System.Drawing
 
 $W = 1200; $H = 630
@@ -121,7 +121,7 @@ foreach ($row in $rows) {
 DrawText "envarsa.dev" "Consolas" 23 ([System.Drawing.FontStyle]::Regular) $bKey 1080 552 $true
 
 $g.Dispose()
-$out = Join-Path $PSScriptRoot "..\brand\og-image.png"
+$out = Join-Path $PSScriptRoot "..\website\brand\og-image.png"
 $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
 Write-Output ("wrote {0} ({1}x{2})" -f $out, $W, $H)
