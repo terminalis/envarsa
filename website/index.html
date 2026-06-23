@@ -470,10 +470,10 @@
           live in one file on your machine — no cloud, no telemetry.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download for Windows &amp; Linux</a>
-          <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa" rel="noopener">View source on GitHub</a>
+          <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
+          <a class="btn btn-ghost" href="#download">Direct download &amp; Linux</a>
         </div>
-        <p class="cta-note">Windows 10/11: installer or portable zip · Linux: AppImage or .deb · x64 · unsigned Windows builds show a one-time SmartScreen prompt</p>
+        <p class="cta-note">Microsoft Store: signed &amp; auto-updating, for Windows 10/11 · or the direct installer, portable zip, AppImage, or .deb below</p>
         <div class="chip-row">
           <span class="chip">no cloud</span>
           <span class="chip">no telemetry</span>
@@ -759,7 +759,12 @@ $ age -d envarsa.store &gt; store.json</code></pre>
     <div class="container">
       <p class="kicker"># download</p>
       <h2 id="dl-h">Get Envarsa for Windows or Linux</h2>
-      <p class="lede">Windows 10/11 or Linux, x64 — grab an artifact from the latest GitHub release.</p>
+      <p class="lede"><strong>Windows:</strong> the Microsoft Store build is the easy path — signed (no SmartScreen prompt) and auto-updating. Want a direct download, or on Linux? Grab an artifact from the latest GitHub release below.</p>
+      <div class="dl-card" style="margin-bottom: 18px;">
+        <h3>Microsoft Store <span class="muted">· Windows · recommended</span></h3>
+        <p>One-click install, signed by the Store, and it updates itself. Best for most Windows users.</p>
+        <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
+      </div>
       <div class="dl-grid">
         <div class="dl-card">
           <h3>Installer <span class="muted">· Windows</span></h3>
@@ -798,8 +803,8 @@ $ age -d envarsa.store &gt; store.json</code></pre>
           start, <a href="https://developer.microsoft.com/microsoft-edge/webview2/" rel="noopener">install it from
           Microsoft</a>. The Linux builds bring their own webview: bundled in the AppImage, pulled by apt for
           the .deb.</li>
-          <li><strong>The binaries are unsigned</strong> — first launch on Windows shows a SmartScreen prompt:
-          <em>More&nbsp;info → Run&nbsp;anyway</em>.</li>
+          <li><strong>The direct Windows downloads are unsigned</strong> — first launch shows a SmartScreen prompt
+          (<em>More&nbsp;info → Run&nbsp;anyway</em>). The Microsoft Store build is signed and skips this.</li>
           <li><strong>Portable means no install, not data-on-a-stick</strong> — the store lives in
           <code>%APPDATA%\com.envarsa.app</code> (Linux: <code>~/.local/share/com.envarsa.app</code>), not next
           to the exe. Repoint it in Settings if you want it somewhere you sync.</li>
