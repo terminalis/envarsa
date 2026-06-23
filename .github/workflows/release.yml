@@ -96,6 +96,12 @@ jobs:
       - name: Package portable zip
         run: npm run package:portable
 
+      - name: Package MSIX for the Microsoft Store
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          ./tools/package-msix.ps1 -Version $version
+
       - name: Attach artifacts to the run
         uses: actions/upload-artifact@v4
         with:
@@ -103,6 +109,15 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
             src-tauri/target/release/bundle/portable/*.zip
+
+      # Unsigned MSIX for the Microsoft Store. Kept as a workflow artifact (not
+      # a public release asset) — download it from this run's Artifacts and
+      # upload to Partner Center, where the Store signs it on ingestion.
+      - name: Attach MSIX to the run (for Microsoft Store upload)
+        uses: actions/upload-artifact@v4
+        with:
+          name: envarsa-msix-x64
+          path: out/Envarsa_*.msix
 
   build-linux:
     runs-on: ubuntu-22.04

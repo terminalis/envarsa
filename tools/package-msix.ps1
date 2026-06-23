@@ -6,16 +6,27 @@
 # real Assets present (tools\generate-msix-assets.ps1). Windows SDK provides
 # makeappx.exe.
 #
-#   pwsh tools\package-msix.ps1
+#   pwsh tools\package-msix.ps1                 # version from Package.appxmanifest
+#   pwsh tools\package-msix.ps1 -Version 1.2.3  # override (CI passes tauri.conf.json's version)
 #
+# -Version sets the package version (normalized to 4-part X.Y.Z.0; the Store
+# reserves the 4th part) WITHOUT editing the committed manifest, so CI keeps the
+# MSIX version locked to the release tag with a single source of truth.
+param([string]$Version)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $rel = Join-Path $root 'src-tauri\target\release'
 $manifest = Join-Path $root 'Package.appxmanifest'
 $arch = 'x64'
 
-$ver = ([xml](Get-Content $manifest -Raw)).Package.Identity.Version
-if ($ver -like '0.*') { throw "Manifest version $ver has major 0, which the Store rejects. Bump to >= 1.0.0.0." }
+if ($Version) {
+  $p = @($Version.Split('.'))
+  while ($p.Count -lt 4) { $p += '0' }
+  $ver = '{0}.{1}.{2}.0' -f $p[0], $p[1], $p[2]
+} else {
+  $ver = ([xml](Get-Content $manifest -Raw)).Package.Identity.Version
+}
+if ($ver -like '0.*') { throw "Package version $ver has major 0, which the Store rejects. Use >= 1.0.0." }
 
 # Locate the newest x64 makeappx.exe from the installed Windows SDK.
 $makeappx = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter makeappx.exe -ErrorAction SilentlyContinue |
@@ -39,7 +50,14 @@ New-Item -ItemType Directory -Force $payload | Out-Null
 Copy-Item (Join-Path $rel 'envarsa.exe') $payload
 Copy-Item (Join-Path $rel 'WebView2Loader.dll') $payload
 Copy-Item (Join-Path $root 'Assets') (Join-Path $payload 'Assets') -Recurse
-Copy-Item $manifest (Join-Path $payload 'AppxManifest.xml')
+
+# Copy the manifest into the payload, setting the Identity version to $ver.
+# The (?m)^\s*Version=" anchor matches only the Identity line, not the
+# MinVersion / MaxVersionTested attributes on the Dependencies element.
+$enc = New-Object System.Text.UTF8Encoding($false)
+$mxText = [IO.File]::ReadAllText($manifest)
+$mxText = $mxText -replace '(?m)^(\s*)Version="[\d.]+"', ('${1}Version="' + $ver + '"')
+[IO.File]::WriteAllText((Join-Path $payload 'AppxManifest.xml'), $mxText, $enc)
 
 $outDir = Join-Path $root 'out'
 New-Item -ItemType Directory -Force $outDir | Out-Null
