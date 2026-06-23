@@ -102,7 +102,7 @@
     {
       "@type": "Question",
       "name": "How do I move my library to another machine?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Portability is manual and yours. Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on the other machine: its projects merge into the library there, with name conflicts flagged per project. Or keep the live store file in a folder you sync yourself." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Portability is manual and yours. Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on the other machine: its projects merge into the library there, with name conflicts flagged per project. Or keep the live store file in a folder you sync yourself. The portable build keeps the store beside the exe, so moving that folder takes your library with it — while installer and Store builds keep it in %APPDATA% (Linux ~/.local/share)." }
     },
     {
       "@type": "Question",
@@ -736,7 +736,9 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         <summary>How do I move my library to another machine?</summary>
         <p>Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on
         the other machine: its projects merge into the library there, with name conflicts flagged per project
-        (replace, rename, or skip). Or keep the live store file in a folder you sync yourself.</p>
+        (replace, rename, or skip). Or keep the live store file in a folder you sync yourself. The portable build
+        keeps the store beside the exe, so moving that folder takes your library with it — while installer and
+        Store builds keep it in <code>%APPDATA%</code> (Linux <code>~/.local/share</code>).</p>
       </details>
       <details>
         <summary>Is Envarsa free and open source?</summary>
