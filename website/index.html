@@ -87,7 +87,7 @@
     {
       "@type": "Question",
       "name": "Which platforms does Envarsa run on?",
-      "acceptedAnswer": { "@type": "Answer", "text": "On Windows 10 and 11 (x64), as a per-user installer or a portable zip — both need the WebView2 runtime, preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as an AppImage — webview bundled, runs on any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers) — or as a Debian package that pulls its dependencies from apt." }
+      "acceptedAnswer": { "@type": "Answer", "text": "On Windows 10 and 11 (x64), as a per-user installer or a portable zip — both need the WebView2 runtime, preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as an AppImage — webview bundled, runs on any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers) — or as a downloadable Debian package whose dependencies are pulled from apt." }
     },
     {
       "@type": "Question",
@@ -719,8 +719,8 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         <summary>Which platforms does it run on?</summary>
         <p>On Windows 10 and 11 (x64), as a per-user installer or a portable zip — both need the WebView2 runtime,
         preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as an AppImage — webview
-        bundled, runs on any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers) — or as a Debian
-        package that pulls its dependencies from apt.</p>
+        bundled, runs on any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers) — or as a downloadable
+        Debian package whose dependencies are pulled from apt.</p>
       </details>
       <details>
         <summary>Why is every value masked, even boring ones like <code>PORT</code>?</summary>
@@ -783,8 +783,9 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         <div class="dl-card">
           <h3>Debian package</h3>
           <span class="file">Envarsa_x.y.z_amd64.deb</span>
-          <p><code>sudo apt install ./Envarsa…amd64.deb</code> — apt pulls the dependencies (WebKitGTK&nbsp;4.1,
-          libssl3) and adds the menu entry.</p>
+          <p>Download the <code>.deb</code>, then run <code>sudo apt install ./Envarsa…amd64.deb</code> from the
+          download folder. apt pulls the dependencies (WebKitGTK&nbsp;4.1, GTK&nbsp;3, libssl3) from your
+          distro&rsquo;s repos and adds a menu entry.</p>
           <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download .deb</a>
         </div>
       </div>
