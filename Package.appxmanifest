@@ -14,7 +14,7 @@
   <Identity
     Name="terminalis.Envarsa"
     Publisher="CN=BA9A4DB5-7404-4BB9-B91C-1919E5F6D381"
-    Version="1.0.1.0"
+    Version="1.1.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
