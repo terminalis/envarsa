@@ -8,7 +8,9 @@ no telemetry, no network calls except an opt-in update check (off by default).
 
 ## Install
 
-From the [latest release](https://github.com/terminalis/envarsa/releases/latest):
+**Windows:** [Get it from the Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M) — signed and auto-updating.
+
+Or from the [latest release](https://github.com/terminalis/envarsa/releases/latest):
 
 **Windows 10/11, x64**
 
