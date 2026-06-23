@@ -76,6 +76,11 @@ pub struct StatusPayload {
     pub store_path: String,
     pub encrypted: bool,
     pub env_override: bool,
+    /// True for the portable build (an `envarsa.portable` marker sits beside
+    /// the exe): the store and config default into that folder, so they
+    /// travel with it. Lets the UI warn that relocating the store *outside*
+    /// the folder un-anchors it from the portable bundle.
+    pub portable: bool,
     pub backup_exists: bool,
     pub project_count: Option<usize>,
     pub error: Option<String>,
@@ -85,6 +90,10 @@ pub struct StatusPayload {
     /// persisted value can never badge the UI.
     pub update_available: Option<String>,
     pub auto_update_check: bool,
+    /// True for the packaged (MSIX / Microsoft Store) build, where updates
+    /// come through the Store. The UI hides its update controls then, and
+    /// `update_available` is forced to None.
+    pub packaged: bool,
 }
 
 fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
@@ -98,23 +107,32 @@ fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
         Session::Locked => ("locked", true, None, None),
         Session::Corrupt { error } => ("corrupt", false, None, Some(error.clone())),
     };
+    let packaged = crate::update::is_packaged();
     StatusPayload {
         state: state_str.to_string(),
         store_path: inner.store_path.to_string_lossy().to_string(),
         encrypted,
         env_override: inner.env_override,
+        portable: crate::state::portable_base().is_some(),
         backup_exists: store::backup_path(&inner.store_path).exists(),
         project_count,
         error,
         app_version: app.package_info().version.to_string(),
-        update_available: inner
-            .config
-            .available_version
-            .as_deref()
-            .and_then(|t| crate::update::parse_tag(t).ok())
-            .filter(|v| *v > app.package_info().version)
-            .map(|v| v.to_string()),
+        // The Store build never runs the GitHub check, so it must never
+        // badge an "available" version either.
+        update_available: if packaged {
+            None
+        } else {
+            inner
+                .config
+                .available_version
+                .as_deref()
+                .and_then(|t| crate::update::parse_tag(t).ok())
+                .filter(|v| *v > app.package_info().version)
+                .map(|v| v.to_string())
+        },
         auto_update_check: inner.config.auto_update_check,
+        packaged,
     }
 }
 
@@ -1723,6 +1741,12 @@ pub async fn check_for_updates(
 ) -> R<UpdateCheckResult> {
     if selftest_active() {
         return Err("update checks are disabled during selftest".into());
+    }
+    if crate::update::is_packaged() {
+        return Err(
+            "This is the Microsoft Store build — it updates through the Store, so the in-app check is off."
+                .into(),
+        );
     }
     let latest = tauri::async_runtime::spawn_blocking(crate::update::fetch_latest_version)
         .await

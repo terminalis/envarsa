@@ -387,6 +387,7 @@ function settingsModal(S, m) {
         <button class="btn" data-act="open-export-store"><span class="btn-ic">${ICONS.download}</span>Export…</button>
         <button class="btn" data-act="open-import-store">Import…</button>
       </div>
+      ${st.portable ? '<p class="hint">Portable build: the store and your settings live in this folder, so they travel with it. <strong>Change location&hellip;</strong> can move the store elsewhere, but a spot outside this folder will not travel when you move the folder.</p>' : ''}
     </section>
     <section>
       <h3>Protection</h3>
@@ -394,6 +395,10 @@ function settingsModal(S, m) {
     </section>
     <section>
       <h3>About</h3>
+      ${st.packaged ? `
+      <p class="muted">Envarsa ${esc(st.appVersion)} — a local-first library for your environment values. It copies and exports, and never injects into processes; the one way it writes into a project tree is an explicit, guarded export to a <span class="mono">.env*.local</span> (never a committed example file). No cloud, no telemetry, and no network calls.</p>
+      <p class="hint">Installed from the Microsoft Store — updates arrive through the Store automatically, so the in-app update check is off.</p>
+      ` : `
       <p class="muted">Envarsa ${esc(st.appVersion)} — a local-first library for your environment values. It copies and exports, and never injects into processes; the one way it writes into a project tree is an explicit, guarded export to a <span class="mono">.env*.local</span> (never a committed example file). No cloud, no telemetry — the only thing that ever leaves is an update check you trigger or opt into below: one request to GitHub for the latest release number.</p>
       <div class="settings-actions">
         <button class="btn" data-act="check-updates"${m.updChecking ? ' disabled' : ''}>${m.updChecking ? 'Checking…' : 'Check for updates'}</button>
@@ -404,6 +409,7 @@ function settingsModal(S, m) {
       ${!m.updError && !st.updateAvailable && m.updDone ? `<p class="hint">You're up to date — ${esc(st.appVersion)} is the latest release.</p>` : ''}
       <label class="check"><input type="checkbox" data-input="auto-update-toggle"${st.autoUpdateCheck ? ' checked' : ''}> Check for updates automatically</label>
       <p class="hint">Off by default. When on, Envarsa asks GitHub for the newest release number shortly after launch, at most once a day — that request is the only network call the app makes, and nothing about your library goes with it.</p>
+      `}
     </section>
   </div>
 </div>`;

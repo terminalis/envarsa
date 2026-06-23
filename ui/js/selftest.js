@@ -84,6 +84,18 @@ export async function runSelftest() {
     assert(storeDir.length > 0, 'store dir resolves');
   });
 
+  await step('status exposes packaged/portable build flags (both off in dev)', async () => {
+    const st = await api.status();
+    // The selftest runs the plain dev build: no MSIX package identity and
+    // no envarsa.portable marker beside the exe, so both flags are false.
+    // The portable flag is what gates the "relocating un-anchors the store"
+    // caveat in Settings.
+    assertEq(typeof st.portable, 'boolean', 'portable is a boolean');
+    assertEq(typeof st.packaged, 'boolean', 'packaged is a boolean');
+    assertEq(st.portable, false, 'portable is false without the marker');
+    assertEq(st.packaged, false, 'packaged is false outside the Store build');
+  });
+
   await step('preview counts entries, comments, problems, dups', async () => {
     const p = await api.previewCapture('A=1\n# c\nA=2\nBAD LINE');
     assertEq(p.entries, 1, 'entries');
