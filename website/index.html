@@ -102,7 +102,7 @@
     {
       "@type": "Question",
       "name": "How do I move my library to another machine?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Portability is manual and yours. Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on the other machine: its projects merge into the library there, with name conflicts flagged per project. Or keep the live store file in a folder you sync yourself." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Portability is manual and yours. Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on the other machine: its projects merge into the library there, with name conflicts flagged per project. Or keep the live store file in a folder you sync yourself. The portable build keeps the store beside the exe, so moving that folder takes your library with it — while installer and Store builds keep it in %APPDATA% (Linux ~/.local/share)." }
     },
     {
       "@type": "Question",
@@ -392,12 +392,6 @@
   }
   .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
   .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 14.5px; flex: 1; }
-  .dl-know {
-    background: var(--bg-rail); border: 1px solid var(--border-soft);
-    border-radius: 12px; padding: 20px 22px 8px;
-  }
-  .dl-know h3 { margin-bottom: 14px; }
-  .dl-know .ticks li { padding-bottom: 12px; font-size: 14.5px; max-width: 86ch; }
 
   /* ------------------------------------------------------------ footer */
 
@@ -444,9 +438,7 @@
       Envarsa
     </a>
     <nav class="site-nav" aria-label="Page sections">
-      <a href="#why">Why</a>
       <a href="#how">How it works</a>
-      <a href="#store">The store file</a>
       <a href="#security">Security</a>
       <a href="#faq">FAQ</a>
     </nav>
@@ -470,10 +462,10 @@
           live in one file on your machine — no cloud, no telemetry.
         </p>
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
-          <a class="btn btn-ghost" href="#download">Direct download &amp; Linux</a>
+          <a class="btn btn-primary" href="#download">Download</a>
+          <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa" rel="noopener">View on GitHub</a>
         </div>
-        <p class="cta-note">Microsoft Store: signed &amp; auto-updating, for Windows 10/11 · or the direct installer, portable zip, AppImage, or .deb below</p>
+        <p class="cta-note">Free &amp; MIT-licensed, for Windows&nbsp;10/11 and Linux · pick your install below</p>
         <div class="chip-row">
           <span class="chip">no cloud</span>
           <span class="chip">no telemetry</span>
@@ -644,7 +636,8 @@
           </ul>
         </div>
         <div>
-<pre aria-label="Store file location and format excerpt"><code><span class="c"># default location (overridable in Settings,</span>
+<pre aria-label="Store file location and format excerpt"><code><span class="c"># default for installed builds — the portable zip</span>
+<span class="c"># keeps it beside the exe (overridable in Settings,</span>
 <span class="c"># or with the ENVARSA_STORE_PATH env var)</span>
 %APPDATA%\com.envarsa.app\envarsa.store       <span class="c"># Windows</span>
 ~/.local/share/com.envarsa.app/envarsa.store  <span class="c"># Linux</span>
@@ -743,7 +736,9 @@ $ age -d envarsa.store &gt; store.json</code></pre>
         <summary>How do I move my library to another machine?</summary>
         <p>Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on
         the other machine: its projects merge into the library there, with name conflicts flagged per project
-        (replace, rename, or skip). Or keep the live store file in a folder you sync yourself.</p>
+        (replace, rename, or skip). Or keep the live store file in a folder you sync yourself. The portable build
+        keeps the store beside the exe, so moving that folder takes your library with it — while installer and
+        Store builds keep it in <code>%APPDATA%</code> (Linux <code>~/.local/share</code>).</p>
       </details>
       <details>
         <summary>Is Envarsa free and open source?</summary>
@@ -762,7 +757,7 @@ $ age -d envarsa.store &gt; store.json</code></pre>
       <p class="lede"><strong>Windows:</strong> the Microsoft Store build is the easy path — signed (no SmartScreen prompt) and auto-updating. Want a direct download, or on Linux? Grab an artifact from the latest GitHub release below.</p>
       <div class="dl-card" style="margin-bottom: 18px;">
         <h3>Microsoft Store <span class="muted">· Windows · recommended</span></h3>
-        <p>One-click install, signed by the Store, and it updates itself. Best for most Windows users.</p>
+        <p>One-click install, signed by the Store, and it updates itself. Best for most Windows users. Prefer a direct download? The <code>.exe</code> installer and portable zip are on GitHub — see the Windows options below.</p>
         <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
       </div>
       <div class="dl-grid">
@@ -794,21 +789,6 @@ $ age -d envarsa.store &gt; store.json</code></pre>
           libssl3) and adds the menu entry.</p>
           <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download .deb</a>
         </div>
-      </div>
-      <div class="dl-know">
-        <h3>Three things to know up front</h3>
-        <ul class="ticks">
-          <li><strong>The Windows builds need the WebView2 runtime</strong> — preinstalled on Windows&nbsp;11 and
-          on any Windows&nbsp;10 kept current. The portable build doesn&rsquo;t fetch it; if the app won&rsquo;t
-          start, <a href="https://developer.microsoft.com/microsoft-edge/webview2/" rel="noopener">install it from
-          Microsoft</a>. The Linux builds bring their own webview: bundled in the AppImage, pulled by apt for
-          the .deb.</li>
-          <li><strong>The direct Windows downloads are unsigned</strong> — first launch shows a SmartScreen prompt
-          (<em>More&nbsp;info → Run&nbsp;anyway</em>). The Microsoft Store build is signed and skips this.</li>
-          <li><strong>Portable means no install, not data-on-a-stick</strong> — the store lives in
-          <code>%APPDATA%\com.envarsa.app</code> (Linux: <code>~/.local/share/com.envarsa.app</code>), not next
-          to the exe. Repoint it in Settings if you want it somewhere you sync.</li>
-        </ul>
       </div>
     </div>
   </section>

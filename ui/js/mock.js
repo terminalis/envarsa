@@ -122,12 +122,14 @@ const COMMANDS = {
     storePath: 'C:\\Users\\you\\AppData\\Roaming\\com.envarsa.app\\envarsa.store',
     encrypted: DB.encrypted,
     envOverride: false,
+    portable: false,
     backupExists: true,
     projectCount: DB.projects.length,
     error: null,
     appVersion: '0.1.0-mock',
     updateAvailable: DB.updateAvailable,
     autoUpdateCheck: DB.autoUpdateCheck,
+    packaged: false,
   }),
   unlock: ({ passphrase }) => {
     if (passphrase !== 'demo') raise('wrong passphrase');

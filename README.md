@@ -15,8 +15,9 @@ Or from the [latest release](https://github.com/terminalis/envarsa/releases/late
 **Windows 10/11, x64**
 
 - **Installer** (`Envarsa_x.y.z_x64-setup.exe`) — per-user NSIS, no admin; fetches WebView2 if missing.
-- **Portable** (`envarsa_x.y.z_x64_portable.zip`) — unzip and run `envarsa.exe` with `WebView2Loader.dll`
-  beside it. Nothing on PATH.
+- **Portable** (`envarsa_x.y.z_x64_portable.zip`) — unzip and run `envarsa.exe`; keep `WebView2Loader.dll`
+  and the `envarsa.portable` marker beside it. Nothing on PATH; the marker keeps config and the store in the
+  folder, so it travels as one unit.
 
 **Linux, x64**
 
@@ -31,8 +32,9 @@ Notes:
   build won't fetch it — install it [from Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)
   if it won't start.
 - Binaries are unsigned; Windows shows a one-time SmartScreen prompt (*More info → Run anyway*).
-- The store lives in `%APPDATA%\com.envarsa.app` (Linux `~/.local/share/com.envarsa.app`), not beside the
-  exe. Repoint it in Settings.
+- Installer and Store builds keep the store in `%APPDATA%\com.envarsa.app` (Linux
+  `~/.local/share/com.envarsa.app`); the portable zip keeps both config and the store beside the exe (via the
+  `envarsa.portable` marker). Repoint it in Settings or with `ENVARSA_STORE_PATH`.
 - Blank window on first Linux launch: relaunch with `WEBKIT_DISABLE_DMABUF_RENDERER=1` (a WebKitGTK DMABUF
   issue on some GPU/Wayland setups).
 
@@ -73,8 +75,9 @@ One portable file, `envarsa.store`:
 - **Manual portability** — export a copy (optionally age-encrypted) and import elsewhere; projects merge,
   name conflicts flagged per project. Or sync the file yourself.
 
-Default path `%APPDATA%\com.envarsa.app\envarsa.store` (Linux `~/.local/share/com.envarsa.app/envarsa.store`);
-override in Settings or `ENVARSA_STORE_PATH`.
+Default path `%APPDATA%\com.envarsa.app\envarsa.store` (Linux `~/.local/share/com.envarsa.app/envarsa.store`)
+for installer and Store builds; the portable zip defaults to `envarsa.store` beside the exe. Override in
+Settings or `ENVARSA_STORE_PATH`.
 
 ## Security
 
@@ -101,7 +104,7 @@ Prereqs — **Windows:** Rust (`x86_64-pc-windows-gnu` works without Visual Stud
 npm install
 npm run dev                # tauri dev
 npm run build              # Windows: exe + NSIS · Linux: AppImage + .deb
-npm run package:portable   # Windows: zip the exe + WebView2Loader.dll
+npm run package:portable   # Windows: zip the exe + WebView2Loader.dll + envarsa.portable marker
 ```
 
 Fresh Windows clone, one-time: `tauri.windows.conf.json` bundles `target/release/WebView2Loader.dll` as a

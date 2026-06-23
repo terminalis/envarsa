@@ -1,5 +1,8 @@
-# Packages the portable Windows build: envarsa.exe + WebView2Loader.dll
-# zipped as envarsa_<version>_x64_portable.zip (version from tauri.conf.json).
+# Packages the portable Windows build: envarsa.exe + WebView2Loader.dll +
+# an envarsa.portable marker, zipped as envarsa_<version>_x64_portable.zip
+# (version from tauri.conf.json). The marker makes the unzipped folder
+# self-contained: with it beside the exe, Envarsa keeps config.json and the
+# store file in that folder instead of %APPDATA%.
 # Run after `npm run build`; needs no toolchain, just Windows PowerShell.
 $ErrorActionPreference = 'Stop'
 
@@ -28,8 +31,20 @@ if (-not (Test-Path $dll)) {
 
 $outDir = Join-Path $releaseDir 'bundle\portable'
 New-Item -ItemType Directory -Force $outDir | Out-Null
+
+# The marker that flips the app into portable mode. Its presence beside the
+# exe is what matters; the text is just a note for anyone who finds it.
+$marker = Join-Path $outDir 'envarsa.portable'
+Set-Content -LiteralPath $marker -Encoding UTF8 -Value @'
+This file marks Envarsa as a portable install.
+While it sits beside envarsa.exe, Envarsa keeps its config.json and store
+file in this folder rather than %APPDATA%, so the whole folder travels as
+one unit. Delete it to fall back to the per-user %APPDATA% location.
+'@
+
 $zip = Join-Path $outDir "envarsa_${version}_x64_portable.zip"
-Compress-Archive -LiteralPath $exe, $dll -DestinationPath $zip -Force
+Compress-Archive -LiteralPath $exe, $dll, $marker -DestinationPath $zip -Force
+Remove-Item -LiteralPath $marker -Force
 
 $mb = [math]::Round((Get-Item $zip).Length / 1MB, 2)
 Write-Output "wrote $zip ($mb MB)"
