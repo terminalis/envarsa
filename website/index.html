@@ -392,6 +392,7 @@
   }
   .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
   .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 14.5px; flex: 1; }
+  .dl-os { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.3px; color: var(--accent); margin: 0 0 12px; }
 
   /* ------------------------------------------------------------ footer */
 
@@ -755,35 +756,32 @@ $ age -d envarsa.store &gt; store.json</code></pre>
       <p class="kicker"># download</p>
       <h2 id="dl-h">Get Envarsa for Windows or Linux</h2>
       <p class="lede"><strong>Windows:</strong> the Microsoft Store build is the easy path — signed (no SmartScreen prompt) and auto-updating. Want a direct download, or on Linux? Grab an artifact from the latest GitHub release below.</p>
-      <div class="dl-card" style="margin-bottom: 18px;">
-        <h3>Microsoft Store <span class="muted">· Windows · recommended</span></h3>
-        <p>One-click install, signed by the Store, and it updates itself. Best for most Windows users. Prefer a direct download? The <code>.exe</code> installer and portable zip are on GitHub — see the Windows options below.</p>
-        <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
-      </div>
+      <p class="dl-os">Windows</p>
       <div class="dl-grid">
         <div class="dl-card">
-          <h3>Installer <span class="muted">· Windows</span></h3>
-          <span class="file">Envarsa_x.y.z_x64-setup.exe</span>
-          <p>Per-user NSIS install — no admin prompt. Fetches the WebView2 runtime on the rare machine that
-          lacks it.</p>
-          <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download installer</a>
+          <h3>Microsoft Store</h3>
+          <p>One-click install, signed by the Store, and it updates itself. Prefer a direct download instead? The <code>.exe</code> installer is on the <a href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">latest GitHub release</a>.</p>
+          <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
         </div>
         <div class="dl-card">
-          <h3>Portable <span class="muted">· Windows</span></h3>
+          <h3>Portable</h3>
           <span class="file">envarsa_x.y.z_x64_portable.zip</span>
           <p>Unzip anywhere, run <code>envarsa.exe</code> — keep <code>WebView2Loader.dll</code> beside it. No
           installer, no admin, nothing on PATH.</p>
           <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download portable zip</a>
         </div>
+      </div>
+      <p class="dl-os">Linux</p>
+      <div class="dl-grid">
         <div class="dl-card">
-          <h3>AppImage <span class="muted">· Linux</span></h3>
+          <h3>AppImage</h3>
           <span class="file">Envarsa_x.y.z_amd64.AppImage</span>
           <p><code>chmod +x</code>, run. The webview (WebKitGTK) and OpenSSL travel inside the file — no install,
           no root, any distro with glibc 2.35+ (Ubuntu 22.04+, Debian 12+, and peers).</p>
           <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download AppImage</a>
         </div>
         <div class="dl-card">
-          <h3>Debian package <span class="muted">· Linux</span></h3>
+          <h3>Debian package</h3>
           <span class="file">Envarsa_x.y.z_amd64.deb</span>
           <p><code>sudo apt install ./Envarsa…amd64.deb</code> — apt pulls the dependencies (WebKitGTK&nbsp;4.1,
           libssl3) and adds the menu entry.</p>
