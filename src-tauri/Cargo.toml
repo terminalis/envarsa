@@ -34,7 +34,7 @@ semver = "1"
 # Same crate version Tauri's stack already pulls in; only enables the
 # DWM feature gates needed to brand the native title bar.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Storage_Packaging_Appx"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Storage_Packaging_Appx"] }
 
 # Without wayland-data-control, arboard speaks only the X11 protocol on
 # Linux and clipboard access would lean on the XWayland bridge; this
