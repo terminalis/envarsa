@@ -103,7 +103,7 @@ jobs:
           ./tools/package-msix.ps1 -Version $version
 
       - name: Attach artifacts to the run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: envarsa-windows-x64
           path: |
@@ -114,7 +114,7 @@ jobs:
       # a public release asset) — download it from this run's Artifacts and
       # upload to Partner Center, where the Store signs it on ingestion.
       - name: Attach MSIX to the run (for Microsoft Store upload)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: envarsa-msix-x64
           path: out/Envarsa_*.msix
@@ -153,7 +153,7 @@ jobs:
         run: npm run build
 
       - name: Attach artifacts to the run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: envarsa-linux-x64
           path: |
