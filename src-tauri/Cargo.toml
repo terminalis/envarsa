@@ -18,7 +18,7 @@ arboard = { version = "3.6", default-features = false }
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-age = "0.11"
+age = "0.12"
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 # The update check (update.rs) — one GET to api.github.com. native-tls
