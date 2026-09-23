@@ -149,6 +149,9 @@ jobs:
       - name: Run engine tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - name: Test GLib security backport with release optimizations
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --release --test glib_variant_str_iter
+
       - name: Build bundles
         run: npm run build
 
