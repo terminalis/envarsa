@@ -123,11 +123,14 @@ fn main() {
 // so the results are deliberately ignored.
 #[cfg(windows)]
 fn apply_brand_titlebar(window: &tauri::WebviewWindow) {
-    use windows::Win32::Foundation::COLORREF;
+    use windows::Win32::Foundation::{COLORREF, HWND};
     use windows::Win32::Graphics::Dwm::{
         DwmSetWindowAttribute, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR,
     };
     let Ok(hwnd) = window.hwnd() else { return };
+    // Tauri may use a different windows crate version. Rewrap the native
+    // handle for our DWM bindings without changing its value or ownership.
+    let hwnd = HWND(hwnd.0);
     // COLORREF is 0x00BBGGRR: brass #e5b35a caption, ink #221a09 text
     // (--accent / --accent-ink in ui/styles.css).
     let caption = COLORREF(0x005A_B3E5);

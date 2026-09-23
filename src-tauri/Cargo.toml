@@ -31,8 +31,8 @@ ureq = { version = "3", default-features = false, features = ["native-tls"] }
 # tauri::PackageInfo.version, so fetched-vs-running compares typed.
 semver = "1"
 
-# Same crate version Tauri's stack already pulls in; only enables the
-# DWM feature gates needed to brand the native title bar.
+# Windows APIs for title-bar branding and Store package detection.
+# Tauri's HWND is rewrapped at the boundary if its bindings version differs.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Storage_Packaging_Appx"] }
 
