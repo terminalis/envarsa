@@ -47,6 +47,14 @@ arboard = { version = "3.6", default-features = false, features = ["wayland-data
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+glib = "0.18.5"
+
+# RUSTSEC-2024-0429: retain GTK 0.18 compatibility with the out-pointer fix.
+# Provenance, validation, and removal instructions: vendor/README.md.
+[patch.crates-io]
+glib = { path = "vendor/glib-0.18.5" }
+
 [profile.release]
 codegen-units = 1
 lto = true
