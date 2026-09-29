@@ -139,15 +139,9 @@ pub fn maybe_spawn_auto_check(app: tauri::AppHandle) {
         // Off the boot path; the window paints first.
         std::thread::sleep(Duration::from_secs(3));
 
-        let due = {
-            let state = app.state::<AppState>();
-            let mut guard = match state.0.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            let Some(inner) = guard.as_mut() else { return };
+        let due = app.state::<AppState>().with(|inner| {
             if !inner.config.auto_update_check {
-                return;
+                return Ok(false);
             }
             let now = chrono::Utc::now().timestamp();
             let due = match inner.config.last_update_check {
@@ -161,32 +155,44 @@ pub fn maybe_spawn_auto_check(app: tauri::AppHandle) {
                 inner.config.last_update_check = Some(now);
                 let _ = state::save_config(&inner.config_path, &inner.config);
             }
-            due
-        };
-        if !due {
+            Ok(due)
+        });
+        if due != Ok(true) {
             return;
         }
 
         let Ok(latest) = fetch_latest_version() else {
             return;
         };
-        let newer = latest > app.package_info().version;
-
-        {
-            let state = app.state::<AppState>();
-            let mut guard = match state.0.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-            };
-            if let Some(inner) = guard.as_mut() {
-                inner.config.available_version = newer.then(|| latest.to_string());
-                let _ = state::save_config(&inner.config_path, &inner.config);
-            }
-        }
-        if newer {
+        if record_check(&app, &latest) {
             let _ = app.emit("update-available", latest.to_string());
         }
     });
+}
+
+/// Record a successful check, manual or automatic: stamp the time, keep
+/// `latest` only while it is newer than the running version, and persist
+/// both. Best effort — a config-write failure must not eat a good answer.
+/// Returns whether `latest` is newer.
+pub fn record_check(app: &tauri::AppHandle, latest: &semver::Version) -> bool {
+    let now = chrono::Utc::now().timestamp();
+    let current = &app.package_info().version;
+    let newer = latest > current;
+    let _ = app.state::<AppState>().with(|inner| {
+        apply_check(&mut inner.config, latest, current, now);
+        state::save_config(&inner.config_path, &inner.config)
+    });
+    newer
+}
+
+fn apply_check(
+    config: &mut state::Config,
+    latest: &semver::Version,
+    current: &semver::Version,
+    now: i64,
+) {
+    config.last_update_check = Some(now);
+    config.available_version = (latest > current).then(|| latest.to_string());
 }
 
 #[cfg(test)]
@@ -251,6 +257,21 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_recorded_check_keeps_only_a_newer_version() {
+        let current = semver::Version::parse("1.1.0").unwrap();
+        let mut c = state::Config::default();
+
+        apply_check(&mut c, &parse_tag("v1.2.0").unwrap(), &current, 100);
+        assert_eq!(c.last_update_check, Some(100));
+        assert_eq!(c.available_version.as_deref(), Some("1.2.0"));
+
+        // Once up to date, the stale "available" answer is cleared.
+        apply_check(&mut c, &parse_tag("v1.1.0").unwrap(), &current, 200);
+        assert_eq!(c.last_update_check, Some(200));
+        assert_eq!(c.available_version, None);
     }
 
     #[test]
