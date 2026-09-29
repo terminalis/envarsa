@@ -32,7 +32,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect x='7.5' y='7.5' width='113' height='113' rx='27' fill='%2313151b' stroke='%232d3240' stroke-width='1.5'/%3E%3Cpath d='M35.5 44H71' stroke='%23e5b35a' stroke-width='11' stroke-linecap='round'/%3E%3Ccircle cx='35.3' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Ccircle cx='52.7' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Ccircle cx='70' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Ccircle cx='87.4' cy='63.5' r='5.3' fill='%237c8599'/%3E%3Cpath d='M35.5 83.5H92' stroke='%23e5b35a' stroke-width='11' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="/brand/mark.svg">
 
 <script type="application/ld+json">
 {
@@ -116,57 +116,11 @@
 }
 </script>
 
+<link rel="stylesheet" href="/site.css">
+
 <style>
-  :root {
-    --bg: #0f1116;
-    --bg-rail: #13151b;
-    --panel: #171a21;
-    --panel-2: #1c2029;
-    --border: #262b36;
-    --border-soft: #1f242e;
-    --text: #e8eaf0;
-    --muted: #8b93a7;
-    --faint: #5c6478;
-    --accent: #e5b35a;
-    --accent-dim: #b98f48;
-    --accent-ink: #221a09;
-    --good: #7fd0a7;
-    --danger: #e07070;
-    --mask: #6b7388;
-    --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
-    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
-    --radius: 9px;
-    --shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
-  }
-
-  * { box-sizing: border-box; }
-
-  html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
-  }
-
-  body {
-    margin: 0;
-    font-family: var(--sans);
-    font-size: 16px;
-    line-height: 1.65;
-    color: var(--text);
-    background:
-      radial-gradient(ellipse 70% 40% at 50% -5%, rgba(229, 179, 90, 0.07), transparent),
-      var(--bg);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
   .mono { font-family: var(--mono); }
   .muted { color: var(--muted); }
-
-  ::selection { background: rgba(229, 179, 90, 0.3); }
-
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
 
   .skip {
     position: absolute; left: -9999px; top: 0;
@@ -179,37 +133,10 @@
 
   /* ------------------------------------------------------------ header */
 
-  .site-head {
-    position: sticky; top: 0; z-index: 50;
-    background: rgba(15, 17, 22, 0.86);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--border-soft);
-  }
-  .nav-row { display: flex; align-items: center; gap: 20px; height: 60px; }
-  .brand {
-    display: flex; align-items: center; gap: 9px;
-    color: var(--text); font-weight: 600; font-size: 17px; letter-spacing: 0.4px;
-  }
-  .brand:hover { text-decoration: none; }
-  .brand svg { display: block; }
   .site-nav { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; }
   .site-nav a { color: var(--muted); font-size: 14px; }
   .site-nav a:hover { color: var(--text); text-decoration: none; }
   .nav-cta { display: flex; gap: 10px; }
-
-  .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    border-radius: var(--radius); padding: 9px 16px;
-    font-size: 14.5px; font-weight: 600; line-height: 1.2;
-    border: 1px solid var(--border); cursor: pointer;
-    transition: filter 120ms ease, border-color 120ms ease;
-  }
-  .btn:hover { text-decoration: none; filter: brightness(1.08); }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  .btn-ghost { background: var(--panel); color: var(--text); }
-  .btn-ghost:hover { border-color: var(--accent-dim); }
-  .btn-sm { padding: 7px 13px; font-size: 13.5px; }
 
   /* -------------------------------------------------------------- hero */
 
@@ -357,11 +284,7 @@
   pre .c { color: var(--faint); }
   pre .s { color: var(--good); }
   pre .k { color: var(--accent); }
-  code {
-    font-family: var(--mono); font-size: 0.92em;
-    background: var(--panel-2); border: 1px solid var(--border-soft);
-    border-radius: 5px; padding: 1px 6px; white-space: nowrap;
-  }
+  code { white-space: nowrap; }
   pre code { background: none; border: none; padding: 0; white-space: pre; }
 
   /* --------------------------------------------------------- security */
@@ -397,19 +320,6 @@
   .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 14.5px; flex: 1; }
   .dl-os { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.3px; color: var(--accent); margin: 0 0 12px; }
 
-  /* ------------------------------------------------------------ footer */
-
-  footer {
-    border-top: 1px solid var(--border-soft);
-    padding: 34px 0 46px; margin-top: 30px;
-    font-size: 13.5px; color: var(--faint);
-  }
-  .foot-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
-  .foot-row .brand { font-size: 15px; }
-  .foot-links { display: flex; gap: 16px; margin-left: auto; flex-wrap: wrap; }
-  .foot-links a { color: var(--muted); }
-  .foot-tag { margin-top: 12px; font-family: var(--mono); font-size: 12px; }
-
   /* ------------------------------------------------------- responsive */
 
   @media (max-width: 940px) {
@@ -432,13 +342,7 @@
 <header class="site-head">
   <div class="container nav-row">
     <a class="brand" href="#top" aria-label="Envarsa — back to top">
-      <svg width="26" height="26" viewBox="0 0 128 128" aria-hidden="true">
-        <rect x="7.5" y="7.5" width="113" height="113" rx="27" fill="#13151b" stroke="#2d3240" stroke-width="1.5"/>
-        <path d="M35.5 44H71" stroke="#e5b35a" stroke-width="11" stroke-linecap="round"/>
-        <circle cx="35.3" cy="63.5" r="5.3" fill="#7c8599"/><circle cx="52.7" cy="63.5" r="5.3" fill="#7c8599"/>
-        <circle cx="70" cy="63.5" r="5.3" fill="#7c8599"/><circle cx="87.4" cy="63.5" r="5.3" fill="#7c8599"/>
-        <path d="M35.5 83.5H92" stroke="#e5b35a" stroke-width="11" stroke-linecap="round"/>
-      </svg>
+      <img src="/brand/mark.svg" width="26" height="26" alt="">
       Envarsa
     </a>
     <nav class="site-nav" aria-label="Page sections">
@@ -801,13 +705,7 @@ $ age -d envarsa.store &gt; store.json</code></pre>
   <div class="container">
     <div class="foot-row">
       <a class="brand" href="#top" aria-label="Envarsa — back to top">
-        <svg width="22" height="22" viewBox="0 0 128 128" aria-hidden="true">
-          <rect x="7.5" y="7.5" width="113" height="113" rx="27" fill="#13151b" stroke="#2d3240" stroke-width="1.5"/>
-          <path d="M35.5 44H71" stroke="#e5b35a" stroke-width="11" stroke-linecap="round"/>
-          <circle cx="35.3" cy="63.5" r="5.3" fill="#7c8599"/><circle cx="52.7" cy="63.5" r="5.3" fill="#7c8599"/>
-          <circle cx="70" cy="63.5" r="5.3" fill="#7c8599"/><circle cx="87.4" cy="63.5" r="5.3" fill="#7c8599"/>
-          <path d="M35.5 83.5H92" stroke="#e5b35a" stroke-width="11" stroke-linecap="round"/>
-        </svg>
+        <img src="/brand/mark.svg" width="22" height="22" alt="">
         Envarsa
       </a>
       <span>MIT licensed</span>
