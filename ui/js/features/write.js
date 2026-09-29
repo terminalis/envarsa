@@ -1,7 +1,8 @@
 // Write .env.local: hand a snapshot's values to a .env.local in the
 // project tree, either into a target file (merge or overwrite) or filled
 // into a .env.example's layout. Rust stages each target behind an opaque
-// token; the webview only ever shows the path.
+// token, and the token's staged kind decides which of the two it is;
+// the webview only ever shows the path.
 import { api } from '../api.js';
 import { esc, errText } from '../util.js';
 import { modalShell } from '../kit.js';
@@ -13,16 +14,16 @@ let previewSeq = 0;
 // re-rendering the dialog, so tab and button focus survive. Only the
 // latest request lands: a slow answer for a tab or mode the user has
 // already left is dropped.
+// The token for the open tab: the staged target, or the example scaffold.
+const tabToken = (m) => (m.tab === 'example' ? m.example?.token : m.token);
+
 async function refreshWritePreview(m) {
   const seq = ++previewSeq;
   const v = S.view;
+  const token = tabToken(m);
   let preview;
   try {
-    if (m.tab === 'example') {
-      preview = m.example ? await api.previewExampleWrite(v.id, v.snapshotId, m.example.token) : null;
-    } else {
-      preview = m.token ? await api.previewWrite(v.id, v.snapshotId, m.token, m.mode) : null;
-    }
+    preview = token ? await api.previewWrite(v.id, v.snapshotId, token, m.mode === 'merge') : null;
   } catch (e) {
     preview = { blocked: errText(e), resultEntryCount: 0, added: [], substituted: [], emptied: [], kept: [] };
   }
@@ -47,8 +48,7 @@ function writePreviewView(p) {
   if (p.substituted.length) bits.push(`updates ${p.substituted.length}`);
   if (p.kept.length) bits.push(`keeps ${p.kept.length}`);
   if (p.emptied.length) bits.push(`blanks ${p.emptied.length}`);
-  // For fresh/overwrite every key is "added"; resultEntryCount already says it.
-  if (p.added.length && p.mode !== 'fresh' && p.mode !== 'overwrite') bits.push(`adds ${p.added.length}`);
+  if (p.added.length) bits.push(`adds ${p.added.length}`);
   return bits.join(' <span class="dot">·</span> ');
 }
 
@@ -71,7 +71,7 @@ ${body}
   <button class="btn" data-act="write-pick-example">${ex ? 'Choose a different example…' : 'Choose .env.example…'}</button>
   <span class="spacer"></span>
   <button class="btn" data-act="close-modal">Cancel</button>
-  ${ex ? `<button class="btn btn-accent" data-act="write-example-confirm"${canWrite(m, ex.outClass) ? '' : ' disabled'}>${m.busy ? 'Writing…' : 'Write .env.local'}</button>` : ''}
+  ${ex ? `<button class="btn btn-accent" data-act="write-confirm"${canWrite(m, ex.outClass) ? '' : ' disabled'}>${m.busy ? 'Writing…' : 'Write .env.local'}</button>` : ''}
 </footer>`;
 }
 
@@ -137,6 +137,8 @@ export const actions = {
     const m = {
       kind: 'write',
       tab: 'target',
+      // Merge into an existing file by default; a new file is written fresh either way.
+      mode: 'merge',
       token: null,
       path: null,
       class: null,
@@ -147,7 +149,6 @@ export const actions = {
       busy: false,
     };
     Object.assign(m, target);
-    m.mode = m.exists ? 'merge' : 'fresh';
     openModal(m);
     refreshWritePreview(m);
   }),
@@ -156,8 +157,6 @@ export const actions = {
     const t = await api.pickWriteTarget(m.dir || null);
     if (!t || S.modal !== m) return;
     Object.assign(m, t);
-    if (!t.exists) m.mode = 'fresh';
-    else if (m.mode === 'fresh') m.mode = 'merge';
     renderModal();
     refreshWritePreview(m);
   }),
@@ -170,14 +169,9 @@ export const actions = {
     refreshWritePreview(m);
   }),
   'write-confirm': busy('write', async (m) => {
-    const path = await api.writeEnvLocal(S.view.id, S.view.snapshotId, m.token, m.mode);
+    const path = await api.writeEnvLocal(S.view.id, S.view.snapshotId, tabToken(m), m.mode === 'merge');
     closeModal();
-    toast('Wrote .env.local', 'success', path);
-  }),
-  'write-example-confirm': busy('write', async (m) => {
-    const path = await api.writeExampleScaffold(S.view.id, S.view.snapshotId, m.example.token);
-    closeModal();
-    toast('Wrote .env.local from the example', 'success', path);
+    toast(m.tab === 'example' ? 'Wrote .env.local from the example' : 'Wrote .env.local', 'success', path);
   }),
 };
 

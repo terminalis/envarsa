@@ -19,18 +19,13 @@ use state::AppState;
 use tauri::Manager;
 
 fn main() {
-    let mut builder = tauri::Builder::default();
-    // The selftest must be able to run while a normal Envarsa is open —
-    // single-instance would silently forward to it and exit.
-    if std::env::var("ENVARSA_SELFTEST").is_err() {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize();
                 let _ = w.set_focus();
             }
-        }));
-    }
-    builder
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
@@ -75,20 +70,15 @@ fn main() {
             commands::secrets::copy_value,
             commands::secrets::copy_block,
             commands::export::export_snapshot,
-            commands::export::export_to_path,
             commands::export::export_store,
-            commands::export::export_store_to_path,
             commands::export::stage_write_target,
             commands::export::pick_write_target,
             commands::export::preview_write,
             commands::export::write_env_local,
             commands::export::pick_example_file,
-            commands::export::preview_example_write,
-            commands::export::write_example_scaffold,
             commands::library::edit_lines,
             commands::library::save_edited_snapshot,
-            commands::library::rename_project,
-            commands::library::set_path_hint,
+            commands::library::update_project,
             commands::library::delete_project,
             commands::library::promote_snapshot,
             commands::session::enable_encryption,
@@ -104,14 +94,6 @@ fn main() {
             commands::transfer::apply_import,
             commands::session::restore_backup,
             commands::ui_log,
-            commands::selftest::selftest_enabled,
-            commands::selftest::selftest_read_clipboard,
-            commands::selftest::selftest_set_clipboard,
-            commands::selftest::selftest_read_file,
-            commands::selftest::selftest_stage_import,
-            commands::selftest::selftest_stage_write,
-            commands::selftest::selftest_stage_example,
-            commands::selftest::selftest_done,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Envarsa");

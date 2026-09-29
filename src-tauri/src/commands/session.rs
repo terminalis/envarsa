@@ -4,7 +4,7 @@ use crate::store::{self, Opened, Store};
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use tauri::{AppHandle, State};
+use tauri::State;
 
 // ---------------------------------------------------------------- status
 
@@ -35,7 +35,7 @@ pub struct StatusPayload {
     pub packaged: bool,
 }
 
-fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
+fn status_of(inner: &Inner) -> StatusPayload {
     let (state_str, encrypted, project_count, error) = match &inner.session {
         Session::Unlocked { store, passphrase } => (
             "unlocked",
@@ -47,6 +47,7 @@ fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
         Session::Corrupt { error } => ("corrupt", false, None, Some(error.clone())),
     };
     let packaged = crate::update::is_packaged();
+    let version = crate::update::running_version();
     StatusPayload {
         state: state_str.to_string(),
         store_path: inner.store_path.to_string_lossy().to_string(),
@@ -56,7 +57,7 @@ fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
         backup_exists: store::backup_path(&inner.store_path).exists(),
         project_count,
         error,
-        app_version: app.package_info().version.to_string(),
+        app_version: version.to_string(),
         // The Store build never runs the GitHub check, so it must never
         // badge an "available" version either.
         update_available: if packaged {
@@ -67,7 +68,7 @@ fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
                 .available_version
                 .as_deref()
                 .and_then(|t| crate::update::parse_tag(t).ok())
-                .filter(|v| *v > app.package_info().version)
+                .filter(|v| *v > version)
                 .map(|v| v.to_string())
         },
         auto_update_check: inner.config.auto_update_check,
@@ -76,8 +77,8 @@ fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
 }
 
 #[tauri::command]
-pub fn store_status(app: AppHandle, state: State<'_, AppState>) -> R<StatusPayload> {
-    state.with(|inner| Ok(status_of(&app, inner)))
+pub fn store_status(state: State<'_, AppState>) -> R<StatusPayload> {
+    state.with(|inner| Ok(status_of(inner)))
 }
 
 #[tauri::command]
@@ -224,7 +225,7 @@ pub fn disable_encryption(state: State<'_, AppState>, passphrase: String) -> R<(
 /// on an encrypted one a possible downgrade to whatever the backup
 /// holds.
 #[tauri::command]
-pub fn restore_backup(app: AppHandle, state: State<'_, AppState>) -> R<StatusPayload> {
+pub fn restore_backup(state: State<'_, AppState>) -> R<StatusPayload> {
     state.with(|inner| {
         if !matches!(inner.session, Session::Corrupt { .. }) {
             return Err(
@@ -239,7 +240,7 @@ pub fn restore_backup(app: AppHandle, state: State<'_, AppState>) -> R<StatusPay
         fs::copy(&bak, &inner.store_path)
             .map_err(|e| format!("could not restore the backup: {e}"))?;
         inner.session = state::init_session(&inner.store_path);
-        Ok(status_of(&app, inner))
+        Ok(status_of(inner))
     })
 }
 

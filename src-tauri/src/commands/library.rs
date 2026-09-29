@@ -260,13 +260,19 @@ pub fn preview_capture(text: String) -> R<CapturePreview> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PickedFile {
+    /// Opaque handle for the file; a capture presents it back to record
+    /// where the snapshot came from. The path stays Rust-side.
+    pub token: String,
+    /// Display only — the webview never sends a path back.
     pub path: String,
+    /// The file's folder, offered as the project folder.
     pub dir: Option<String>,
     pub name_guess: Option<String>,
     pub text: String,
 }
 
-fn read_env_file(path: &Path) -> R<PickedFile> {
+/// Read a picked or dropped `.env` and stage it as a capture's source.
+pub(super) fn stage_env_file(state: &State<'_, AppState>, path: &Path) -> R<PickedFile> {
     let text = read_text_capped(path)?;
     let dir = path.parent().map(|p| p.to_string_lossy().to_string());
     // A .env usually lives in the project root, so the parent folder
@@ -276,6 +282,7 @@ fn read_env_file(path: &Path) -> R<PickedFile> {
         .and_then(|p| p.file_name())
         .map(|n| n.to_string_lossy().to_string());
     Ok(PickedFile {
+        token: state.with(|inner| Ok(inner.stage_source(path.to_path_buf())))?,
         path: path.to_string_lossy().to_string(),
         dir,
         name_guess,
@@ -284,20 +291,20 @@ fn read_env_file(path: &Path) -> R<PickedFile> {
 }
 
 #[tauri::command]
-pub async fn pick_env_file(app: AppHandle) -> R<Option<PickedFile>> {
+pub async fn pick_env_file(app: AppHandle, state: State<'_, AppState>) -> R<Option<PickedFile>> {
     dialog_path(&app, |d| {
         d.set_title("Choose a .env file to capture")
             .blocking_pick_file()
     })
     .await?
-    .map(|path| read_env_file(&path))
+    .map(|path| stage_env_file(&state, &path))
     .transpose()
 }
 
 /// Drag/drop is handled as a window event so the path never round-trips
-/// through the webview: Rust reads the file and hands the UI a finished
-/// payload. There is no path-taking IPC command for webview JavaScript
-/// to call.
+/// through the webview: Rust reads and stages the file and hands the UI
+/// a finished payload. There is no path-taking IPC command for webview
+/// JavaScript to call.
 pub fn handle_drop(window: &tauri::Window, paths: &[PathBuf]) {
     let state = window.state::<AppState>();
     let unlocked = state
@@ -307,7 +314,7 @@ pub fn handle_drop(window: &tauri::Window, paths: &[PathBuf]) {
         return;
     }
     let Some(path) = paths.first() else { return };
-    match read_env_file(path) {
+    match stage_env_file(&state, path) {
         Ok(picked) => {
             let _ = window.emit("env-file-dropped", &picked);
         }
@@ -320,11 +327,14 @@ pub fn handle_drop(window: &tauri::Window, paths: &[PathBuf]) {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureArgs {
-    pub project_id: Option<String>,
-    pub project_name: Option<String>,
+    /// Captures always go by name: an existing project (matched like
+    /// every name, trimmed and case-insensitive) or a new one.
+    pub project_name: String,
     pub path_hint: Option<String>,
     pub text: String,
-    pub source_path: Option<String>,
+    /// The token of the picked or dropped file, when the text came from
+    /// one; absent for a paste.
+    pub source_token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -385,22 +395,28 @@ fn add_snapshot(
 
 #[tauri::command]
 pub fn capture(state: State<'_, AppState>, args: CaptureArgs) -> R<CaptureResult> {
-    let via = if args.source_path.is_some() {
-        "file"
-    } else {
-        "paste"
+    let source = match &args.source_token {
+        Some(token) => Some(state.with(|inner| {
+            inner
+                .pending_source(token)
+                .map(|p| p.to_string_lossy().to_string())
+                .ok_or_else(|| "that file is no longer staged — choose it again".into())
+        })?),
+        None => None,
     };
-    let snapshot = Snapshot::new(via, args.source_path, args.text);
+    let via = if source.is_some() { "file" } else { "paste" };
+    let snapshot = Snapshot::new(via, source, args.text);
     mutate(&state, |store| {
         add_snapshot(
             store,
-            args.project_id.as_deref(),
-            args.project_name.as_deref(),
+            None,
+            Some(&args.project_name),
             args.path_hint.as_deref(),
             snapshot,
         )
     })
 }
+
 // ----------------------------------------------------- structured editor
 //
 // The editor builds a draft line list in the webview, then saves it as a
@@ -491,8 +507,15 @@ pub fn save_edited_snapshot(state: State<'_, AppState>, args: SaveEditArgs) -> R
 
 // ----------------------------------------------------- project editing
 
+/// Rename a project and set its folder in one save, so an edit is never
+/// half applied. A blank folder clears it.
 #[tauri::command]
-pub fn rename_project(state: State<'_, AppState>, project_id: String, name: String) -> R<()> {
+pub fn update_project(
+    state: State<'_, AppState>,
+    project_id: String,
+    name: String,
+    path_hint: String,
+) -> R<()> {
     mutate(&state, |store| {
         let name = name.trim();
         if name.is_empty() {
@@ -505,20 +528,8 @@ pub fn rename_project(state: State<'_, AppState>, project_id: String, name: Stri
         }
         let p = store.find_mut(&project_id)?;
         p.name = name.to_string();
-        Ok(())
-    })
-}
-
-#[tauri::command]
-pub fn set_path_hint(state: State<'_, AppState>, project_id: String, path_hint: String) -> R<()> {
-    mutate(&state, |store| {
-        let p = store.find_mut(&project_id)?;
-        let trimmed = path_hint.trim();
-        p.path_hint = if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        };
+        let hint = path_hint.trim();
+        p.path_hint = (!hint.is_empty()).then(|| hint.to_string());
         Ok(())
     })
 }

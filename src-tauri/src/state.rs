@@ -121,16 +121,36 @@ impl Session {
     }
 }
 
-/// A store file the user picked for import. The dialog command mints
-/// the token and keeps the path here, on the Rust side — inspect/apply
-/// accept only the token, so the webview never supplies a path.
-pub struct PendingImport {
+/// A file the user picked: a `.env` to capture, or a store to import.
+/// The picker mints the token and keeps the path here, on the Rust side;
+/// later commands accept only the token, so the webview never supplies a
+/// path.
+pub struct PendingFile {
     pub token: String,
     pub path: PathBuf,
 }
 
+impl PendingFile {
+    /// Stage `path` in `slot`, replacing whatever was there, and return
+    /// the new token.
+    fn stage(slot: &mut Option<PendingFile>, path: PathBuf) -> String {
+        let token = store::new_id();
+        *slot = Some(PendingFile {
+            token: token.clone(),
+            path,
+        });
+        token
+    }
+
+    fn path_for<'a>(slot: &'a Option<PendingFile>, token: &str) -> Option<&'a Path> {
+        slot.as_ref()
+            .filter(|p| p.token == token)
+            .map(|p| p.path.as_path())
+    }
+}
+
 /// A `.env*.local` write target the user is about to commit to. Like
-/// `PendingImport`, the path stays here on the Rust side — the write
+/// `PendingFile`, the path stays here on the Rust side — the write
 /// command takes only the token, so the webview never supplies a path.
 /// `template`, when set, is an imported `.env.example`'s text used as the
 /// scaffold for the merge; the example file itself is only ever read.
@@ -150,13 +170,16 @@ pub struct Inner {
     pub env_override: bool,
     pub session: Session,
     /// At most one import is in flight; a new pick replaces it.
-    pub pending_import: Option<PendingImport>,
+    pending_import: Option<PendingFile>,
+    /// The `.env` file last picked or dropped for capture, so a capture
+    /// can record where it came from without the webview sending a path.
+    pending_source: Option<PendingFile>,
     /// The write modal's two tabs each keep one staged `.env.local`
     /// write: a plain target, and an example scaffold (`template` set).
     /// A new pick replaces only its own kind, so choosing an example
     /// never un-stages the target picked on the other tab.
-    pub pending_target: Option<PendingWrite>,
-    pub pending_example: Option<PendingWrite>,
+    pending_target: Option<PendingWrite>,
+    pending_example: Option<PendingWrite>,
 }
 
 impl Inner {
@@ -174,6 +197,7 @@ impl Inner {
             env_override,
             session,
             pending_import: None,
+            pending_source: None,
             pending_target: None,
             pending_example: None,
         }
@@ -182,19 +206,20 @@ impl Inner {
     /// Stage a picked import file and return its token. A new pick
     /// replaces the previous one.
     pub fn stage_import(&mut self, path: PathBuf) -> String {
-        let token = store::new_id();
-        self.pending_import = Some(PendingImport {
-            token: token.clone(),
-            path,
-        });
-        token
+        PendingFile::stage(&mut self.pending_import, path)
     }
 
     pub fn pending_import(&self, token: &str) -> Option<&Path> {
-        self.pending_import
-            .as_ref()
-            .filter(|p| p.token == token)
-            .map(|p| p.path.as_path())
+        PendingFile::path_for(&self.pending_import, token)
+    }
+
+    /// Stage a picked or dropped `.env` file as a capture's source.
+    pub fn stage_source(&mut self, path: PathBuf) -> String {
+        PendingFile::stage(&mut self.pending_source, path)
+    }
+
+    pub fn pending_source(&self, token: &str) -> Option<&Path> {
+        PendingFile::path_for(&self.pending_source, token)
     }
 
     /// Stage a write and return its token.
@@ -572,6 +597,25 @@ mod tests {
         assert!(i.pending_import(&first).is_none(), "old pick replaced");
         assert_eq!(i.pending_import(&second), Some(Path::new("/b.store")));
         assert!(i.pending_import("not-a-token").is_none());
+    }
+
+    #[test]
+    fn capture_sources_and_imports_stage_separately() {
+        let mut i = inner();
+        let import = i.stage_import(PathBuf::from("/a.store"));
+        let source = i.stage_source(PathBuf::from("/app/.env"));
+        assert_eq!(i.pending_source(&source), Some(Path::new("/app/.env")));
+        assert!(
+            i.pending_import(&import).is_some(),
+            "a capture pick keeps the import"
+        );
+        assert!(
+            i.pending_source(&import).is_none(),
+            "tokens don't cross kinds"
+        );
+        let next = i.stage_source(PathBuf::from("/web/.env"));
+        assert!(i.pending_source(&source).is_none(), "old pick replaced");
+        assert_eq!(i.pending_source(&next), Some(Path::new("/web/.env")));
     }
 
     /// The write modal's two tabs stage independently: picking on one

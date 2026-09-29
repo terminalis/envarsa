@@ -16,12 +16,16 @@ rs=$(sed -n '/generate_handler!\[/,/\])/p' src-tauri/src/main.rs | tail -n +2 \
      | grep -oE '[a-z_]+(::[a-z_]+)+' | sed -E 's/.*:://' | sort -u)
 same "IPC commands  api.js == generate_handler!" "$js" "$rs"
 
-# 2. Every app event Rust emits is listened for in the UI, and vice versa.
+# 2. The browser-preview mock answers exactly the commands api.js invokes.
+mock=$(sed -n '/^const COMMANDS = {/,/^};/p' ui/js/mock.js | grep -oE '^  [a-z_]+:' | sed -E 's/[ :]//g' | sort -u)
+same "mock commands mock.js == api.js" "$mock" "$js"
+
+# 3. Every app event Rust emits is listened for in the UI, and vice versa.
 rs_ev=$(grep -rhoE 'emit\("[a-z-]+"' src-tauri/src | sed -E 's/emit\("//; s/"//' | sort -u)
 js_ev=$(grep -rhoE "onEvent\('[a-z-]+'" ui/js | sed -E "s/onEvent\('//; s/'//" | sort -u)
 same "events        emit(...) == onEvent(...)" "$rs_ev" "$js_ev"
 
-# 3. Every static data-act / data-input / data-form value has a handler key somewhere in ui/js.
+# 4. Every static data-act / data-input / data-form value has a handler key somewhere in ui/js.
 for attr in act input form; do
   missing=""
   for k in $(grep -rhoE "data-$attr=\"[a-z-]+\"" ui/js | sed -E "s/data-$attr=\"//; s/\"//" | sort -u); do

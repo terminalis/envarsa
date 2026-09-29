@@ -47,6 +47,10 @@ arboard = { version = "3.6", default-features = false, features = ["wayland-data
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
+[dev-dependencies]
+# tauri::test's mock app lets the command tests call the real commands.
+tauri = { version = "2", features = ["test"] }
+
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 glib = "0.18.5"
 
