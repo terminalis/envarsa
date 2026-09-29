@@ -11,7 +11,6 @@ pub(crate) mod secrets;
 pub(crate) mod selftest;
 pub(crate) mod session;
 pub(crate) mod transfer;
-pub(crate) mod updates;
 
 use crate::envfile;
 use crate::state::AppState;
@@ -22,7 +21,7 @@ use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 
 pub(crate) type R<T> = Result<T, String>;
 
-fn selftest_active() -> bool {
+pub(crate) fn selftest_active() -> bool {
     std::env::var("ENVARSA_SELFTEST").is_ok()
 }
 
