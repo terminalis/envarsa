@@ -1,3 +1,4 @@
+use super::session::check_passphrase;
 use super::{dialog_path, selftest_active, with_store, R};
 use crate::crypto;
 use crate::envfile::{self, Line};
@@ -63,9 +64,7 @@ pub fn export_to_path(
 /// transport passphrase (independent of the at-rest one).
 fn store_copy_bytes(state: &State<'_, AppState>, passphrase: Option<&str>) -> R<Vec<u8>> {
     if let Some(p) = passphrase {
-        if p.chars().count() < 8 {
-            return Err("use at least 8 characters".into());
-        }
+        check_passphrase(p)?;
     }
     let bytes = with_store(state, |store| Ok(store::serialize_store(store)))?;
     match passphrase {

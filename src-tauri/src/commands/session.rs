@@ -1,8 +1,9 @@
 use super::R;
 use crate::state::{self, AppState, Inner, Session};
-use crate::store::{self, Opened};
+use crate::store::{self, Opened, Store};
 use serde::Serialize;
 use std::fs;
+use std::path::Path;
 use tauri::{AppHandle, State};
 
 // ---------------------------------------------------------------- status
@@ -112,37 +113,96 @@ pub fn lock(state: State<'_, AppState>) -> R<()> {
 }
 
 // ------------------------------------------------------------ protection
+//
+// Each command checks its own preconditions, then reprotect saves the
+// store under the new protection and realigns the backup.
 
-#[tauri::command]
-pub fn enable_encryption(state: State<'_, AppState>, passphrase: String) -> R<()> {
+/// The passphrase rule for at-rest encryption and encrypted exports.
+pub(crate) fn check_passphrase(passphrase: &str) -> R<()> {
     if passphrase.chars().count() < 8 {
         return Err("use at least 8 characters".into());
     }
-    state.with(|inner| {
-        let path = inner.store_path.clone();
-        match &mut inner.session {
-            Session::Unlocked {
-                store,
-                passphrase: current,
-            } => {
-                if current.is_some() {
-                    return Err("encryption is already enabled".into());
-                }
-                *current = Some(passphrase);
-                let pass = current.clone();
-                if let Err(e) = store::save(store, &path, pass.as_deref()) {
-                    *current = None; // the file on disk is still plaintext
-                    return Err(e);
-                }
-                // The save preserved the pre-encryption bytes as `.bak`;
-                // rewrite it so no plaintext copy outlives the transition.
-                store::align_backup(&path).map_err(|e| {
-                    format!("the store is encrypted, but the old plaintext backup survived — {e}")
-                })
-            }
-            _ => Err("unlock the store first".into()),
-        }
-    })
+    Ok(())
+}
+
+/// The unlocked store and its passphrase, when encryption is on.
+fn encrypted(session: &mut Session) -> R<(&mut Store, &mut Option<String>)> {
+    match session.unlocked_mut() {
+        Ok((store, held)) if held.is_some() => Ok((store, held)),
+        _ => Err("encryption is not enabled".into()),
+    }
+}
+
+/// Save the store under `next` (a passphrase, or None for plaintext) and
+/// only then adopt it, so a failed save leaves the session matching the
+/// file on disk. The save keeps the previous bytes as `.bak`, which are
+/// under the old protection; rewrite it so, for example, no plaintext
+/// copy outlives encrypting. `backup_err` says where that leaves things
+/// if only the backup rewrite fails.
+fn reprotect(
+    path: &Path,
+    store: &mut Store,
+    held: &mut Option<String>,
+    next: Option<String>,
+    backup_err: &str,
+) -> R<()> {
+    store::save(store, path, next.as_deref())?;
+    *held = next;
+    store::align_backup(path).map_err(|e| format!("{backup_err} — {e}"))
+}
+
+fn enable(inner: &mut Inner, passphrase: String) -> R<()> {
+    check_passphrase(&passphrase)?;
+    let (store, held) = inner
+        .session
+        .unlocked_mut()
+        .map_err(|_| "unlock the store first".to_string())?;
+    if held.is_some() {
+        return Err("encryption is already enabled".into());
+    }
+    reprotect(
+        &inner.store_path,
+        store,
+        held,
+        Some(passphrase),
+        "the store is encrypted, but the old plaintext backup survived",
+    )
+}
+
+fn change(inner: &mut Inner, current: String, new_passphrase: String) -> R<()> {
+    check_passphrase(&new_passphrase)?;
+    let (store, held) = encrypted(&mut inner.session)?;
+    if held.as_deref() != Some(current.as_str()) {
+        return Err("the current passphrase is not right".into());
+    }
+    reprotect(
+        &inner.store_path,
+        store,
+        held,
+        Some(new_passphrase),
+        "the passphrase was changed, but the backup still uses the old one",
+    )
+}
+
+fn disable(inner: &mut Inner, passphrase: String) -> R<()> {
+    let (store, held) = encrypted(&mut inner.session)?;
+    if held.as_deref() != Some(passphrase.as_str()) {
+        return Err("the passphrase is not right".into());
+    }
+    // Keep the backup in step with the live store's protection state,
+    // so a later restore can't silently re-encrypt (or vice versa).
+    reprotect(
+        &inner.store_path,
+        store,
+        held,
+        None,
+        "the store is decrypted, but the backup could not be rewritten",
+    )
+}
+
+#[tauri::command]
+pub fn enable_encryption(state: State<'_, AppState>, passphrase: String) -> R<()> {
+    state.with(|inner| enable(inner, passphrase))
 }
 
 #[tauri::command]
@@ -151,63 +211,12 @@ pub fn change_passphrase(
     current: String,
     new_passphrase: String,
 ) -> R<()> {
-    if new_passphrase.chars().count() < 8 {
-        return Err("use at least 8 characters".into());
-    }
-    state.with(|inner| {
-        let path = inner.store_path.clone();
-        match &mut inner.session {
-            Session::Unlocked {
-                store,
-                passphrase: Some(held),
-            } => {
-                if *held != current {
-                    return Err("the current passphrase is not right".into());
-                }
-                let old = std::mem::replace(held, new_passphrase);
-                if let Err(e) = store::save(store, &path, Some(held.clone()).as_deref()) {
-                    *held = old; // the file on disk still uses the old passphrase
-                    return Err(e);
-                }
-                // Don't leave a backup that the old passphrase still opens.
-                store::align_backup(&path).map_err(|e| {
-                    format!(
-                        "the passphrase was changed, but the backup still uses the old one — {e}"
-                    )
-                })
-            }
-            _ => Err("encryption is not enabled".into()),
-        }
-    })
+    state.with(|inner| change(inner, current, new_passphrase))
 }
 
 #[tauri::command]
 pub fn disable_encryption(state: State<'_, AppState>, passphrase: String) -> R<()> {
-    state.with(|inner| {
-        let path = inner.store_path.clone();
-        match &mut inner.session {
-            Session::Unlocked {
-                store,
-                passphrase: held @ Some(_),
-            } => {
-                if held.as_deref() != Some(passphrase.as_str()) {
-                    return Err("the passphrase is not right".into());
-                }
-                let old = held.take();
-                if let Err(e) = store::save(store, &path, None) {
-                    *held = old; // the file on disk is still encrypted
-                    return Err(e);
-                }
-                // Keep the backup in step with the live store's
-                // protection state, so a later restore can't silently
-                // re-encrypt (or vice versa).
-                store::align_backup(&path).map_err(|e| {
-                    format!("the store is decrypted, but the backup could not be rewritten — {e}")
-                })
-            }
-            _ => Err("encryption is not enabled".into()),
-        }
-    })
+    state.with(|inner| disable(inner, passphrase))
 }
 
 /// Restoring is only offered (and only allowed) when the store cannot
@@ -232,4 +241,123 @@ pub fn restore_backup(app: AppHandle, state: State<'_, AppState>) -> R<StatusPay
         inner.session = state::init_session(&inner.store_path);
         Ok(status_of(&app, inner))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto;
+    use crate::state::Config;
+    use crate::store::fixtures::{project, store_of, tmp_dir};
+    use std::path::PathBuf;
+
+    const PASS: &str = "correct horse";
+
+    /// An unlocked session over a store saved at `path` (plaintext, or
+    /// under `passphrase`).
+    fn inner_at(path: PathBuf, passphrase: Option<&str>) -> Inner {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        store::save(&mut store, &path, passphrase).unwrap();
+        let session = Session::Unlocked {
+            store,
+            passphrase: passphrase.map(String::from),
+        };
+        Inner::new(path, PathBuf::new(), Config::default(), false, session)
+    }
+
+    fn held(inner: &Inner) -> Option<&str> {
+        match &inner.session {
+            Session::Unlocked { passphrase, .. } => passphrase.as_deref(),
+            _ => panic!("session is not unlocked"),
+        }
+    }
+
+    fn encrypted_on_disk(path: &Path) -> bool {
+        crypto::is_encrypted(&fs::read(path).unwrap())
+    }
+
+    #[test]
+    fn enable_encrypts_the_store_and_its_backup() {
+        let dir = tmp_dir("enable");
+        let path = dir.join("envarsa.store");
+        let mut inner = inner_at(path.clone(), None);
+        // A second save, so a plaintext .bak exists before the transition.
+        store::save(inner.session.unlocked_mut().unwrap().0, &path, None).unwrap();
+
+        assert_eq!(
+            enable(&mut inner, "short".into()).unwrap_err(),
+            "use at least 8 characters"
+        );
+        enable(&mut inner, PASS.into()).unwrap();
+        assert_eq!(held(&inner), Some(PASS));
+        assert!(encrypted_on_disk(&path));
+        assert!(encrypted_on_disk(&store::backup_path(&path)));
+        assert_eq!(
+            enable(&mut inner, PASS.into()).unwrap_err(),
+            "encryption is already enabled"
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn change_and_disable_check_the_held_passphrase() {
+        let dir = tmp_dir("change");
+        let path = dir.join("envarsa.store");
+        let mut inner = inner_at(path.clone(), Some(PASS));
+
+        let wrong = change(&mut inner, "nope".into(), "new passphrase".into());
+        assert_eq!(wrong.unwrap_err(), "the current passphrase is not right");
+        change(&mut inner, PASS.into(), "new passphrase".into()).unwrap();
+        assert_eq!(held(&inner), Some("new passphrase"));
+        let bak = fs::read(store::backup_path(&path)).unwrap();
+        assert!(
+            crypto::decrypt(&bak, "new passphrase").is_ok(),
+            "the backup follows the new passphrase"
+        );
+
+        assert_eq!(
+            disable(&mut inner, PASS.into()).unwrap_err(),
+            "the passphrase is not right"
+        );
+        disable(&mut inner, "new passphrase".into()).unwrap();
+        assert_eq!(held(&inner), None);
+        assert!(!encrypted_on_disk(&path));
+        assert!(!encrypted_on_disk(&store::backup_path(&path)));
+        assert_eq!(
+            disable(&mut inner, "new passphrase".into()).unwrap_err(),
+            "encryption is not enabled"
+        );
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_failed_save_keeps_the_old_protection() {
+        let dir = tmp_dir("reprotect-fail");
+        let mut inner = inner_at(dir.join("envarsa.store"), None);
+        // A regular file where the store's folder should be: the save
+        // cannot create it.
+        fs::write(dir.join("blocker"), b"").unwrap();
+        inner.store_path = dir.join("blocker").join("envarsa.store");
+
+        assert!(enable(&mut inner, PASS.into()).is_err());
+        assert_eq!(held(&inner), None, "memory never gets ahead of disk");
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn protection_commands_need_an_unlocked_store() {
+        let mut inner = Inner::new(
+            PathBuf::new(),
+            PathBuf::new(),
+            Config::default(),
+            false,
+            Session::Locked,
+        );
+        assert_eq!(
+            enable(&mut inner, PASS.into()).unwrap_err(),
+            "unlock the store first"
+        );
+        let err = change(&mut inner, PASS.into(), PASS.into()).unwrap_err();
+        assert_eq!(err, "encryption is not enabled");
+    }
 }
