@@ -42,7 +42,7 @@ flowchart LR
 | `update.rs` | The opt-in update check and the only network code. It holds the three update commands and the build's running version. |
 | `commands/mod.rs` | Plumbing shared by the commands: `with_store`, `mutate`, `dialog_path` and `read_text_capped`. |
 | `commands/session.rs` | Status, unlock, lock, the three protection changes (through `reprotect`) and restoring a backup. |
-| `commands/library.rs` | Listing, the project view with reuse badges, capture (from a paste, a picked file or a dropped file), the editor, project edits, delete and promote. |
+| `commands/library.rs` | Listing, the project view with reuse badges, capture (from a paste, a picked file or a dropped file), the editor, project edits, delete, and restoring an older snapshot. |
 | `commands/secrets.rs` | Reveal, and copy to the clipboard. |
 | `commands/export.rs` | Exporting a snapshot or a copy of the store, and the whole `.env.local` write: staging, the write plan, preview and write. |
 | `commands/transfer.rs` | Revealing and relocating the store file, and importing another store. |
@@ -137,7 +137,8 @@ location. The dialog shows the resulting path, and the name guard still applies.
 
 ## Invariants
 
-These are the rules the code keeps. Refactors may change how one is enforced, never what it guarantees.
+These are the rules the code keeps. Refactors may change how one is enforced, never what it guarantees. Each
+place that enforces a rule names it in a comment.
 
 | Name | Rule | Enforced in |
 |---|---|---|

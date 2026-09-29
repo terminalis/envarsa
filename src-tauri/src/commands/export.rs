@@ -2,7 +2,7 @@ use super::session::check_passphrase;
 use super::{dialog_path, read_text_capped, with_store, R};
 use crate::crypto;
 use crate::envfile::{self, merge_with_report, AbsentPolicy, MergeReport};
-use crate::envpath::classify_name;
+use crate::envpath::{classify_name, NameClass};
 use crate::state::AppState;
 use crate::store;
 use serde::Serialize;
@@ -103,6 +103,8 @@ pub async fn export_store(
 
 /// The last check before any bytes are written. Run on the final resolved
 /// path, regardless of how it was chosen.
+///
+/// Invariant: WRITES-ONLY-LOCAL (ARCHITECTURE.md).
 fn guard_writable_local(path: &Path) -> R<()> {
     match classify_name(path).refusal() {
         Some(why) => Err(why.into()),
@@ -231,14 +233,14 @@ pub struct WriteTarget {
     pub path: String,
     /// The target's directory, to seed a "change location" dialog.
     pub dir: String,
-    pub class: String,
+    pub class: NameClass,
     pub exists: bool,
 }
 
 /// Stage `path` as the target tab's write and describe it.
 pub(super) fn stage_target(state: &State<'_, AppState>, path: PathBuf) -> R<WriteTarget> {
     Ok(WriteTarget {
-        class: classify_name(&path).as_str().to_string(),
+        class: classify_name(&path),
         exists: path.exists(),
         dir: path
             .parent()
@@ -341,7 +343,7 @@ pub struct ExampleStaged {
     pub example_name: String,
     /// Display only — the staged output path (`<example dir>/.env.local`).
     pub out_path: String,
-    pub out_class: String,
+    pub out_class: NameClass,
     pub example_keys: Vec<String>,
 }
 
@@ -379,7 +381,7 @@ pub(super) fn stage_example(state: &State<'_, AppState>, path: &Path) -> R<Examp
         .map(|(k, _)| k)
         .collect();
     Ok(ExampleStaged {
-        out_class: classify_name(&out_path).as_str().to_string(),
+        out_class: classify_name(&out_path),
         out_path: out_path.to_string_lossy().to_string(),
         token: stage_write(state, out_path, Some(template))?,
         example_name,

@@ -46,7 +46,7 @@ export const modalShell = ({ cls, label, title = label }, body) => `
 // binding in live dialogs, a form field name in submitted ones.
 export const folderField = (id, value, attrs) => `
 <div class="field">
-  <label for="${id}">Filepath <span class="muted">(optional)</span></label>
+  <label for="${id}">Project folder <span class="muted">(optional)</span></label>
   <input id="${id}" ${attrs} value="${esc(value)}" placeholder="C:\\path\\to\\project" autocomplete="off" spellcheck="false">
 </div>`;
 

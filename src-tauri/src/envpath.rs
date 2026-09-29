@@ -6,28 +6,24 @@
 //! `.env*.local`, and never on a git-committed example file where a
 //! secret would leak into version control.
 
+use serde::Serialize;
 use std::path::Path;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Crosses IPC as the UI's badge: "writable", "example" or "other".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum NameClass {
     /// `.env.local`, `.env.development.local`, … — the only writable shape.
+    #[serde(rename = "writable")]
     WritableLocal,
     /// `.env.example`/`.sample`/`.template`/`.dist` — always refused.
+    #[serde(rename = "example")]
     ExampleFamily,
     /// Anything else (bare `.env`, `.env.local.bak`, `notes.txt`, …).
+    #[serde(rename = "other")]
     Other,
 }
 
 impl NameClass {
-    /// "writable" | "example" | "other" — for the UI badge.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            NameClass::WritableLocal => "writable",
-            NameClass::ExampleFamily => "example",
-            NameClass::Other => "other",
-        }
-    }
-
     /// Why a write to this class is refused; `None` when it's writable.
     pub fn refusal(self) -> Option<&'static str> {
         match self {
@@ -122,9 +118,10 @@ mod tests {
 
     #[test]
     fn only_writable_local_is_allowed() {
-        assert_eq!(c(".env.local").as_str(), "writable");
-        assert_eq!(c(".env.example").as_str(), "example");
-        assert_eq!(c(".env").as_str(), "other");
+        let badge = |name| serde_json::to_value(c(name)).unwrap();
+        assert_eq!(badge(".env.local"), "writable");
+        assert_eq!(badge(".env.example"), "example");
+        assert_eq!(badge(".env"), "other");
         assert_eq!(c(".env.local").refusal(), None);
         assert!(c(".env.example")
             .refusal()

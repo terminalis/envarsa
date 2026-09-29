@@ -369,7 +369,7 @@ fn update_project_renames_and_sets_the_folder_in_one_save() {
 }
 
 #[test]
-fn a_recapture_adds_history_and_promote_brings_an_old_snapshot_back() {
+fn a_recapture_adds_history_and_restore_brings_an_old_snapshot_back() {
     let env = Env::new("cmd-history");
     let a = env.capture("alpha", ALPHA);
     env.capture("alpha", "A2=1\n");
@@ -380,7 +380,7 @@ fn a_recapture_adds_history_and_promote_brings_an_old_snapshot_back() {
     assert_eq!(oldest["entryCount"], 5);
 
     let old_id = oldest["id"].as_str().unwrap().to_string();
-    let id = library::promote_snapshot(env.state(), a.project_id.clone(), old_id).unwrap();
+    let id = library::restore_snapshot(env.state(), a.project_id.clone(), old_id).unwrap();
     let v = env.view(&a.project_id, None);
     assert_eq!(v["snapshots"].as_array().unwrap().len(), 3);
     assert_eq!(v["snapshotId"], id.as_str());

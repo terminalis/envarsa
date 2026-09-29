@@ -8,10 +8,19 @@ use tauri::State;
 
 // ---------------------------------------------------------------- status
 
+/// Which gate, if any, the UI shows before the library.
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionState {
+    Unlocked,
+    Locked,
+    Corrupt,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusPayload {
-    pub state: String, // "unlocked" | "locked" | "corrupt"
+    pub state: SessionState,
     pub store_path: String,
     pub encrypted: bool,
     pub env_override: bool,
@@ -36,20 +45,20 @@ pub struct StatusPayload {
 }
 
 fn status_of(inner: &Inner) -> StatusPayload {
-    let (state_str, encrypted, project_count, error) = match &inner.session {
+    let (state, encrypted, project_count, error) = match &inner.session {
         Session::Unlocked { store, passphrase } => (
-            "unlocked",
+            SessionState::Unlocked,
             passphrase.is_some(),
             Some(store.projects.len()),
             None,
         ),
-        Session::Locked => ("locked", true, None, None),
-        Session::Corrupt { error } => ("corrupt", false, None, Some(error.clone())),
+        Session::Locked => (SessionState::Locked, true, None, None),
+        Session::Corrupt { error } => (SessionState::Corrupt, false, None, Some(error.clone())),
     };
     let packaged = crate::update::is_packaged();
     let version = crate::update::running_version();
     StatusPayload {
-        state: state_str.to_string(),
+        state,
         store_path: inner.store_path.to_string_lossy().to_string(),
         encrypted,
         env_override: inner.env_override,
@@ -140,6 +149,8 @@ fn encrypted(session: &mut Session) -> R<(&mut Store, &mut Option<String>)> {
 /// under the old protection; rewrite it so, for example, no plaintext
 /// copy outlives encrypting. `backup_err` says where that leaves things
 /// if only the backup rewrite fails.
+///
+/// Invariants: MEMORY-FOLLOWS-DISK and BACKUP-MATCHES-PROTECTION (ARCHITECTURE.md).
 fn reprotect(
     path: &Path,
     store: &mut Store,

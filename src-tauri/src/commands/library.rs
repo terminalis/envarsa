@@ -102,6 +102,8 @@ pub enum LineView {
     /// The raw text stays out of the listing — a malformed line is as
     /// likely as any to hold a secret, so it is masked like a value and
     /// crosses only through `reveal_value`.
+    ///
+    /// Invariant: VALUES-ON-REVEAL (ARCHITECTURE.md).
     Bad {
         idx: usize,
     },
@@ -546,9 +548,10 @@ pub fn delete_project(state: State<'_, AppState>, project_id: String) -> R<()> {
     })
 }
 
-/// Re-adds an older snapshot as the newest one ("bring this back").
+/// Re-adds an older snapshot as the newest one ("Bring this back as
+/// latest"), recorded as `via: "restore"`.
 #[tauri::command]
-pub fn promote_snapshot(
+pub fn restore_snapshot(
     state: State<'_, AppState>,
     project_id: String,
     snapshot_id: String,

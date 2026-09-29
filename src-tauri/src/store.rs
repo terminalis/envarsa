@@ -360,6 +360,8 @@ pub fn backup_path(path: &Path) -> PathBuf {
 /// make it before calling. Used both for the store and for the one place
 /// Envarsa writes into a project tree (a `.env*.local`), so a crash can
 /// never leave a torn file.
+///
+/// Invariant: ATOMIC-WRITES (ARCHITECTURE.md).
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         if !dir.as_os_str().is_empty() {
@@ -404,6 +406,8 @@ pub fn save(store: &mut Store, path: &Path, passphrase: Option<&str>) -> Result<
 /// protection — most notably a plaintext backup surviving the moment
 /// the user encrypts the store. If the rewrite fails, the stale backup
 /// is removed instead; only when both fail is an error returned.
+///
+/// Invariant: BACKUP-MATCHES-PROTECTION (ARCHITECTURE.md).
 pub fn align_backup(path: &Path) -> Result<(), String> {
     let bak = backup_path(path);
     if let Err(copy_err) = fs::copy(path, &bak) {

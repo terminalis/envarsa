@@ -80,7 +80,7 @@ fn main() {
             commands::library::save_edited_snapshot,
             commands::library::update_project,
             commands::library::delete_project,
-            commands::library::promote_snapshot,
+            commands::library::restore_snapshot,
             commands::session::enable_encryption,
             commands::session::change_passphrase,
             commands::session::disable_encryption,
