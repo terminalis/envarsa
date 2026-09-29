@@ -67,7 +67,8 @@ flowchart LR
 | Path | What it is |
 |---|---|
 | `tools/check-contract.sh` | Checks that `api.js` and the command list match, that the mock answers every command, that emitted and handled events match, and that every `data-*` key has a handler. |
-| `.github/workflows/ci.yml` | On every pull request: `cargo fmt --check`, `cargo test`, and the contract script. |
+| `.github/workflows/ci.yml` | On every pull request: `cargo fmt --check`, `cargo test` and the contract script on Linux, and `cargo test` on the windows-gnu toolchain the release uses. |
+| `.github/actions/setup-windows-gnu/` | The Windows toolchain setup and `WebView2Loader.dll` staging, shared by `ci.yml` and `release.yml`. |
 | `.github/workflows/release.yml` | Tagged releases: the Windows installer, portable zip and MSIX, plus the Linux AppImage and `.deb`. |
 | `tools/package-*.ps1`, `Package.appxmanifest`, `Assets/` | Windows portable and Microsoft Store packaging. |
 | `website/` | envarsa.dev, published by `pages.yml`. |
