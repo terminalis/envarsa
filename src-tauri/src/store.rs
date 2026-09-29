@@ -39,7 +39,9 @@ pub struct Project {
 pub struct Snapshot {
     pub id: String,
     pub captured_at: String,
-    /// "file" | "paste" | "restore"
+    /// "file" | "paste" | "edit" | "restore". Kept a string, not an
+    /// enum: it's persisted, and an older build must still load a store
+    /// written by a newer one.
     pub via: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
@@ -68,10 +70,54 @@ impl Store {
     }
 
     pub fn project_by_name(&self, name: &str) -> Option<&Project> {
-        let needle = name.trim().to_lowercase();
-        self.projects
-            .iter()
-            .find(|p| p.name.trim().to_lowercase() == needle)
+        let needle = name_key(name);
+        self.projects.iter().find(|p| name_key(&p.name) == needle)
+    }
+
+    /// A project and one of its snapshots; `None` means the latest.
+    #[allow(dead_code)] // Not yet called from commands.rs.
+    pub fn find(
+        &self,
+        project_id: &str,
+        snapshot_id: Option<&str>,
+    ) -> Result<(&Project, &Snapshot), String> {
+        let project = self
+            .project(project_id)
+            .ok_or_else(|| "project not found".to_string())?;
+        let snapshot = match snapshot_id {
+            Some(id) => project
+                .snapshot(id)
+                .ok_or_else(|| "snapshot not found".to_string())?,
+            None => project
+                .latest()
+                .ok_or_else(|| "project has no snapshots".to_string())?,
+        };
+        Ok((project, snapshot))
+    }
+
+    #[allow(dead_code)] // Not yet called from commands.rs.
+    pub fn find_mut(&mut self, project_id: &str) -> Result<&mut Project, String> {
+        self.project_mut(project_id)
+            .ok_or_else(|| "project not found".to_string())
+    }
+}
+
+/// Project-name identity: names match ignoring case and surrounding
+/// whitespace.
+pub fn name_key(name: &str) -> String {
+    name.trim().to_lowercase()
+}
+
+impl Snapshot {
+    /// A new snapshot captured now, with a fresh id.
+    pub fn new(via: &str, source_path: Option<String>, raw: String) -> Self {
+        Snapshot {
+            id: new_id(),
+            captured_at: now_iso(),
+            via: via.to_string(),
+            source_path,
+            raw,
+        }
     }
 }
 
@@ -109,6 +155,27 @@ pub fn parse_store(bytes: &[u8]) -> Result<Store, String> {
         ));
     }
     Ok(store)
+}
+
+/// A store file's bytes, opened as far as the passphrase allows.
+pub enum Opened {
+    Plain(Store),
+    #[allow(dead_code)] // Not yet read by commands.rs.
+    Encrypted(Store),
+    /// Encrypted, and no passphrase was given.
+    NeedsPassphrase,
+}
+
+/// Detect age encryption, decrypt when a passphrase is given, then parse.
+/// A plaintext file opens whether or not a passphrase was given.
+pub fn open(bytes: &[u8], passphrase: Option<&str>) -> Result<Opened, String> {
+    if !crate::crypto::is_encrypted(bytes) {
+        return parse_store(bytes).map(Opened::Plain);
+    }
+    match passphrase {
+        None => Ok(Opened::NeedsPassphrase),
+        Some(p) => parse_store(&crate::crypto::decrypt(bytes, p)?).map(Opened::Encrypted),
+    }
 }
 
 pub fn serialize_store(store: &Store) -> Vec<u8> {
@@ -161,13 +228,12 @@ pub fn merge_import(
     decisions: &[ImportDecision],
 ) -> Result<ImportSummary, String> {
     use std::collections::HashSet;
-    let norm = |s: &str| s.trim().to_lowercase();
 
     // A hand-edited file could carry blank or duplicate names; refuse
     // rather than guess which project the user meant.
     let mut seen: HashSet<String> = HashSet::new();
     for p in &incoming.projects {
-        let n = norm(&p.name);
+        let n = name_key(&p.name);
         if n.is_empty() {
             return Err("that store has a project with an empty name".into());
         }
@@ -191,7 +257,7 @@ pub fn merge_import(
     for project in incoming.projects {
         let decision = decisions
             .iter()
-            .find(|d| norm(&d.name) == norm(&project.name))
+            .find(|d| name_key(&d.name) == name_key(&project.name))
             .ok_or_else(|| {
                 format!(
                     "no decision for incoming project \"{}\"",
@@ -221,7 +287,7 @@ pub fn merge_import(
                         project.name.trim()
                     ));
                 }
-                replaced.insert(norm(&project.name));
+                replaced.insert(name_key(&project.name));
                 summary.replaced += 1;
                 project.name.trim().to_string()
             }
@@ -252,11 +318,11 @@ pub fn merge_import(
     let mut taken: HashSet<String> = store
         .projects
         .iter()
-        .map(|p| norm(&p.name))
+        .map(|p| name_key(&p.name))
         .filter(|n| !replaced.contains(n))
         .collect();
     for pl in &planned {
-        if !taken.insert(norm(&pl.final_name)) {
+        if !taken.insert(name_key(&pl.final_name)) {
             return Err(format!(
                 "the name \"{}\" would collide with another project",
                 pl.final_name
@@ -266,7 +332,7 @@ pub fn merge_import(
 
     store
         .projects
-        .retain(|p| !replaced.contains(&norm(&p.name)));
+        .retain(|p| !replaced.contains(&name_key(&p.name)));
     for pl in planned {
         let mut project = pl.project;
         project.id = new_id();
@@ -317,17 +383,9 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-/// Durable store write: back up the previous version, then atomically
-/// replace the target.
-pub fn write_store_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if path.exists() {
-        fs::copy(path, backup_path(path)).map_err(|e| format!("could not write backup: {e}"))?;
-    }
-    write_atomic(path, bytes)
-}
-
 /// Serialize (and, when a passphrase is set, encrypt) the store, then
-/// write it durably. Bumps `updated_at`.
+/// write it durably: back up the previous version, then atomically
+/// replace the target. Bumps `updated_at`.
 pub fn save(store: &mut Store, path: &Path, passphrase: Option<&str>) -> Result<(), String> {
     store.updated_at = now_iso();
     let bytes = serialize_store(store);
@@ -335,7 +393,10 @@ pub fn save(store: &mut Store, path: &Path, passphrase: Option<&str>) -> Result<
         Some(p) => crate::crypto::encrypt(&bytes, p)?,
         None => bytes,
     };
-    write_store_file(path, &bytes)
+    if path.exists() {
+        fs::copy(path, backup_path(path)).map_err(|e| format!("could not write backup: {e}"))?;
+    }
+    write_atomic(path, &bytes)
 }
 
 /// Rewrite the backup with the live store's current bytes.
@@ -362,32 +423,43 @@ pub fn align_backup(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Builders shared by the test modules of every file.
 #[cfg(test)]
-mod tests {
+pub(crate) mod fixtures {
     use super::*;
 
-    fn tmp_dir(name: &str) -> PathBuf {
+    /// A fresh, empty directory under the system temp dir.
+    pub fn tmp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("envarsa-test-{name}-{}", new_id()));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
 
-    fn store_with_one_project() -> Store {
-        let mut s = Store::new_empty();
-        s.projects.push(Project {
+    /// A project with one pasted snapshot holding `raw`.
+    pub fn project(name: &str, raw: &str) -> Project {
+        Project {
             id: new_id(),
-            name: "alpha".into(),
-            path_hint: Some("C:\\dev\\alpha".into()),
+            name: name.into(),
+            path_hint: None,
             created_at: now_iso(),
-            snapshots: vec![Snapshot {
-                id: new_id(),
-                captured_at: now_iso(),
-                via: "paste".into(),
-                source_path: None,
-                raw: "A=1\nB=2\n".into(),
-            }],
-        });
+            snapshots: vec![Snapshot::new("paste", None, raw.into())],
+        }
+    }
+
+    pub fn store_of(projects: Vec<Project>) -> Store {
+        let mut s = Store::new_empty();
+        s.projects = projects;
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fixtures::*;
+    use super::*;
+
+    fn store_with_one_project() -> Store {
+        store_of(vec![project("alpha", "A=1\nB=2\n")])
     }
 
     #[test]
@@ -474,28 +546,6 @@ mod tests {
         fs::remove_dir_all(dir).ok();
     }
 
-    fn project(name: &str, raw: &str) -> Project {
-        Project {
-            id: new_id(),
-            name: name.into(),
-            path_hint: None,
-            created_at: now_iso(),
-            snapshots: vec![Snapshot {
-                id: new_id(),
-                captured_at: now_iso(),
-                via: "paste".into(),
-                source_path: None,
-                raw: raw.into(),
-            }],
-        }
-    }
-
-    fn store_of(projects: Vec<Project>) -> Store {
-        let mut s = Store::new_empty();
-        s.projects = projects;
-        s
-    }
-
     fn decide(name: &str, action: ImportAction, new_name: Option<&str>) -> ImportDecision {
         ImportDecision {
             name: name.into(),
@@ -535,13 +585,7 @@ mod tests {
         mine.project_mut(&mine.projects[0].id.clone())
             .unwrap()
             .snapshots
-            .push(Snapshot {
-                id: new_id(),
-                captured_at: now_iso(),
-                via: "paste".into(),
-                source_path: None,
-                raw: "OLD=2\n".into(),
-            });
+            .push(Snapshot::new("paste", None, "OLD=2\n".into()));
         let incoming = store_of(vec![project("Alpha", "NEW=1\n")]);
 
         let sum = merge_import(
@@ -647,6 +691,71 @@ mod tests {
             mine.project_by_name("alpha").unwrap().snapshots[0].raw,
             "A=1\n"
         );
+    }
+
+    #[test]
+    fn find_resolves_a_snapshot_or_the_latest() {
+        let mut s = store_of(vec![project("alpha", "A=1\n")]);
+        let pid = s.projects[0].id.clone();
+        let first = s.projects[0].snapshots[0].id.clone();
+        s.find_mut(&pid)
+            .unwrap()
+            .snapshots
+            .push(Snapshot::new("edit", None, "A=2\n".into()));
+
+        let (p, snap) = s.find(&pid, None).unwrap();
+        assert_eq!((p.name.as_str(), snap.raw.as_str()), ("alpha", "A=2\n"));
+        let (_, snap) = s.find(&pid, Some(&first)).unwrap();
+        assert_eq!(snap.raw, "A=1\n");
+
+        assert_eq!(s.find("nope", None).unwrap_err(), "project not found");
+        assert_eq!(
+            s.find(&pid, Some("nope")).unwrap_err(),
+            "snapshot not found"
+        );
+        assert_eq!(s.find_mut("nope").unwrap_err(), "project not found");
+        s.find_mut(&pid).unwrap().snapshots.clear();
+        assert_eq!(s.find(&pid, None).unwrap_err(), "project has no snapshots");
+    }
+
+    #[test]
+    fn snapshot_new_fills_id_and_time() {
+        let a = Snapshot::new("file", Some("/app/.env".into()), "A=1\n".into());
+        let b = Snapshot::new("paste", None, String::new());
+        assert_ne!(a.id, b.id);
+        assert!(!a.captured_at.is_empty());
+        assert_eq!(
+            (a.via.as_str(), a.source_path.as_deref(), a.raw.as_str()),
+            ("file", Some("/app/.env"), "A=1\n")
+        );
+    }
+
+    #[test]
+    fn name_key_ignores_case_and_surrounding_space() {
+        assert_eq!(name_key("  My App "), "my app");
+        assert_eq!(name_key("my app"), name_key("MY APP"));
+        let s = store_of(vec![project("Alpha", "A=1\n")]);
+        assert!(s.project_by_name(" alpha ").is_some());
+    }
+
+    #[test]
+    fn open_plain_encrypted_and_locked() {
+        let bytes = serialize_store(&store_with_one_project());
+        assert!(matches!(open(&bytes, None), Ok(Opened::Plain(_))));
+        assert!(
+            matches!(open(&bytes, Some("unused")), Ok(Opened::Plain(_))),
+            "a plaintext file opens even when a passphrase is offered"
+        );
+
+        let enc = crate::crypto::encrypt(&bytes, "hunter2hunter2").unwrap();
+        assert!(matches!(open(&enc, None), Ok(Opened::NeedsPassphrase)));
+        match open(&enc, Some("hunter2hunter2")) {
+            Ok(Opened::Encrypted(s)) => assert_eq!(s.projects[0].name, "alpha"),
+            _ => panic!("expected the decrypted store"),
+        }
+        let err = open(&enc, Some("wrong-passphrase")).err().unwrap();
+        assert!(err.contains("wrong passphrase"), "got: {err}");
+        assert!(open(b"{\"hello\":1}", None).is_err());
     }
 
     #[test]
