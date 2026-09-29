@@ -36,7 +36,7 @@ pub fn reveal_value(
     with_store(&state, |store| {
         match line_at(store, &project_id, &snapshot_id, idx)? {
             Line::Entry { key, value, .. } => Ok(RevealedValue { key, value }),
-            Line::Bad(raw) => Ok(RevealedValue {
+            Line::Bad { raw } => Ok(RevealedValue {
                 key: String::new(),
                 value: raw,
             }),

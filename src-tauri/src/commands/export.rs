@@ -407,7 +407,7 @@ pub async fn pick_example_file(
         .collect();
     let example_comments = lines
         .iter()
-        .filter(|l| matches!(l, Line::Comment(_)))
+        .filter(|l| matches!(l, Line::Comment { .. }))
         .count();
     Ok(Some(ExampleStaged {
         out_class: classify_name(&out_path).as_str().to_string(),

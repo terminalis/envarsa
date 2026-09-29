@@ -155,8 +155,8 @@ pub fn get_project(
             .enumerate()
             .map(|(idx, line)| match line {
                 Line::Blank => LineView::Blank,
-                Line::Comment(text) => LineView::Comment { text: text.clone() },
-                Line::Bad(_) => LineView::Bad { idx },
+                Line::Comment { text } => LineView::Comment { text: text.clone() },
+                Line::Bad { .. } => LineView::Bad { idx },
                 Line::Entry {
                     key,
                     value,
@@ -235,8 +235,8 @@ pub fn preview_capture(text: String) -> R<CapturePreview> {
     let mut bad = 0;
     for line in &lines {
         match line {
-            Line::Comment(_) => comments += 1,
-            Line::Bad(_) => bad += 1,
+            Line::Comment { .. } => comments += 1,
+            Line::Bad { .. } => bad += 1,
             Line::Entry { key, .. } => {
                 if keys.contains(key) {
                     if !dups.contains(key) {
@@ -409,47 +409,39 @@ pub fn capture(state: State<'_, AppState>, args: CaptureArgs) -> R<CaptureResult
 // text verbatim and history is preserved. This is also the store-only
 // "new project by hand" path: no file in, no file out.
 
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum EditLine {
-    Blank,
-    Comment {
-        text: String,
-    },
-    #[serde(rename_all = "camelCase")]
-    Entry {
-        key: String,
-        value: String,
-        exported: bool,
-    },
-    Bad {
-        raw: String,
-    },
-}
-
-fn edit_line_to_line(e: &EditLine) -> Line {
-    match e {
-        EditLine::Blank => Line::Blank,
-        EditLine::Comment { text } => {
+/// Tidy a line from the editor before it is saved: a comment stays on
+/// one line and starts with `#`; a key is trimmed and must be one the
+/// parser accepts.
+fn edited_line(line: Line) -> R<Line> {
+    Ok(match line {
+        Line::Comment { text } => {
             let t = text.replace(['\n', '\r'], " ");
             let t = t.trim_end();
-            if t.trim_start().starts_with('#') {
-                Line::Comment(t.to_string())
+            let text = if t.trim_start().starts_with('#') {
+                t.to_string()
             } else {
-                Line::Comment(format!("# {}", t.trim_start()))
-            }
+                format!("# {}", t.trim_start())
+            };
+            Line::Comment { text }
         }
-        EditLine::Entry {
+        Line::Entry {
             key,
             value,
             exported,
-        } => Line::Entry {
-            key: key.trim().to_string(),
-            value: value.clone(),
-            exported: *exported,
-        },
-        EditLine::Bad { raw } => Line::Bad(raw.clone()),
-    }
+        } => {
+            if !envfile::is_valid_key(key.trim()) {
+                return Err(format!(
+                    "\"{key}\" is not a valid key — keys can't be empty or contain spaces, #, \", or '"
+                ));
+            }
+            Line::Entry {
+                key: key.trim().to_string(),
+                value,
+                exported,
+            }
+        }
+        other => other,
+    })
 }
 
 /// Seed the editor from an existing snapshot (latest if none given).
@@ -460,26 +452,10 @@ pub fn edit_lines(
     state: State<'_, AppState>,
     project_id: String,
     snapshot_id: Option<String>,
-) -> R<Vec<EditLine>> {
+) -> R<Vec<Line>> {
     with_store(&state, |store| {
         let (_, snapshot) = store.find(&project_id, snapshot_id.as_deref())?;
-        Ok(envfile::parse(&snapshot.raw)
-            .into_iter()
-            .map(|l| match l {
-                Line::Blank => EditLine::Blank,
-                Line::Comment(text) => EditLine::Comment { text },
-                Line::Entry {
-                    key,
-                    value,
-                    exported,
-                } => EditLine::Entry {
-                    key,
-                    value,
-                    exported,
-                },
-                Line::Bad(raw) => EditLine::Bad { raw },
-            })
-            .collect())
+        Ok(envfile::parse(&snapshot.raw))
     })
 }
 
@@ -489,7 +465,7 @@ pub struct SaveEditArgs {
     pub project_id: Option<String>,
     pub project_name: Option<String>,
     pub path_hint: Option<String>,
-    pub lines: Vec<EditLine>,
+    pub lines: Vec<Line>,
 }
 
 /// Save the edited lines as a new snapshot (`via: "edit"`). Resolves or
@@ -497,23 +473,12 @@ pub struct SaveEditArgs {
 /// path too. Validates keys before mutating.
 #[tauri::command]
 pub fn save_edited_snapshot(state: State<'_, AppState>, args: SaveEditArgs) -> R<CaptureResult> {
-    for line in &args.lines {
-        if let EditLine::Entry { key, .. } = line {
-            let k = key.trim();
-            let bad = k.is_empty()
-                || k.chars()
-                    .any(|c| c.is_whitespace() || c == '#' || c == '"' || c == '\'');
-            if bad {
-                return Err(format!(
-                    "\"{key}\" is not a valid key — keys can't be empty or contain spaces, #, \", or '"
-                ));
-            }
-        }
-    }
-    let lines: Vec<Line> = args.lines.iter().map(edit_line_to_line).collect();
-    let raw = envfile::serialize_lines(&lines);
-
-    let snapshot = Snapshot::new("edit", None, raw);
+    let lines = args
+        .lines
+        .into_iter()
+        .map(edited_line)
+        .collect::<R<Vec<_>>>()?;
+    let snapshot = Snapshot::new("edit", None, envfile::serialize_lines(&lines));
     mutate(&state, |store| {
         add_snapshot(
             store,
@@ -594,6 +559,45 @@ pub fn promote_snapshot(
 mod tests {
     use super::*;
     use crate::store::fixtures::{project, store_of};
+
+    fn comment(text: &str) -> Line {
+        Line::Comment { text: text.into() }
+    }
+
+    #[test]
+    fn edited_comments_stay_on_one_line_and_start_with_a_hash() {
+        assert_eq!(edited_line(comment("# kept  ")).unwrap(), comment("# kept"));
+        assert_eq!(edited_line(comment("  note")).unwrap(), comment("# note"));
+        assert_eq!(
+            edited_line(comment("# two\nlines")).unwrap(),
+            comment("# two lines")
+        );
+    }
+
+    #[test]
+    fn edited_keys_are_trimmed_and_checked() {
+        let entry = |key: &str| Line::Entry {
+            key: key.into(),
+            value: " v ".into(),
+            exported: true,
+        };
+        assert_eq!(
+            edited_line(entry("  PORT ")).unwrap(),
+            Line::Entry {
+                key: "PORT".into(),
+                value: " v ".into(),
+                exported: true,
+            }
+        );
+        for bad in ["", "  ", "A B", "A#B", "A\"B", "A'B"] {
+            let err = edited_line(entry(bad)).unwrap_err();
+            assert!(err.contains("is not a valid key"), "{bad:?}: {err}");
+        }
+        let raw = Line::Bad {
+            raw: "not = a line".into(),
+        };
+        assert_eq!(edited_line(raw.clone()).unwrap(), raw);
+    }
 
     fn paste(raw: &str) -> Snapshot {
         Snapshot::new("paste", None, raw.into())
