@@ -38,11 +38,7 @@ pub fn parse(raw: &str) -> Vec<Line> {
             match body.split_once('=') {
                 Some((k, v)) => {
                     let key = k.trim();
-                    let key_ok = !key.is_empty()
-                        && !key
-                            .chars()
-                            .any(|c| c.is_whitespace() || c == '#' || c == '"' || c == '\'');
-                    if key_ok {
+                    if is_valid_key(key) {
                         lines.push(Line::Entry {
                             key: key.to_string(),
                             value: parse_value(v.trim()),
@@ -57,6 +53,15 @@ pub fn parse(raw: &str) -> Vec<Line> {
         }
     }
     lines
+}
+
+/// What the parser accepts as a key, and so what the editor may save:
+/// non-empty, with no whitespace, `#`, or quote. Callers trim first.
+pub fn is_valid_key(key: &str) -> bool {
+    !key.is_empty()
+        && !key
+            .chars()
+            .any(|c| c.is_whitespace() || c == '#' || c == '"' || c == '\'')
 }
 
 /// Effective value of a raw .env value token: surrounding quotes are
@@ -220,25 +225,52 @@ pub enum AbsentPolicy {
     KeepTarget,
 }
 
+/// Key names only (values never go here), partitioned by what a merge
+/// did with each: appended from the source, substituted into the target,
+/// blanked (`EmptyOut`), or left as the target had them (`KeepTarget`).
+/// Target keys are listed once, in first-seen order; added keys in
+/// source order.
+#[derive(Debug, Default, PartialEq)]
+pub struct MergeReport {
+    pub added: Vec<String>,
+    pub substituted: Vec<String>,
+    pub emptied: Vec<String>,
+    pub kept: Vec<String>,
+}
+
 /// Merge effective `source` entries into a target's line structure:
 /// keep the target's comments, blanks, ordering, and each entry's
 /// `export`/casing; substitute values for keys the source has; apply
 /// `absent` to target keys the source lacks; then append source-only
 /// keys (source order) under one attribution comment.
 pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
+    merge_with_report(target_lines, source, absent).0
+}
+
+/// `merge`, plus the report of what it did — from the same pass, so a
+/// preview built from the report can't disagree with the bytes written.
+pub fn merge_with_report(
+    target_lines: &[Line],
+    source: &[(String, String)],
+    absent: AbsentPolicy,
+) -> (String, MergeReport) {
     use std::collections::{HashMap, HashSet};
     let source_map: HashMap<&str, &str> = source
         .iter()
         .map(|(k, v)| (k.as_str(), v.as_str()))
         .collect();
-    let mut used: HashSet<&str> = HashSet::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    let mut report = MergeReport::default();
 
     let mut out: Vec<Line> = Vec::with_capacity(target_lines.len() + source.len() + 2);
     for line in target_lines {
         match line {
             Line::Entry { key, exported, .. } => {
+                let first = seen.insert(key.as_str());
                 if let Some(sv) = source_map.get(key.as_str()) {
-                    used.insert(key.as_str());
+                    if first {
+                        report.substituted.push(key.clone());
+                    }
                     out.push(Line::Entry {
                         key: key.clone(),
                         value: (*sv).to_string(),
@@ -246,12 +278,22 @@ pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentP
                     });
                 } else {
                     match absent {
-                        AbsentPolicy::EmptyOut => out.push(Line::Entry {
-                            key: key.clone(),
-                            value: String::new(),
-                            exported: *exported,
-                        }),
-                        AbsentPolicy::KeepTarget => out.push(line.clone()),
+                        AbsentPolicy::EmptyOut => {
+                            if first {
+                                report.emptied.push(key.clone());
+                            }
+                            out.push(Line::Entry {
+                                key: key.clone(),
+                                value: String::new(),
+                                exported: *exported,
+                            })
+                        }
+                        AbsentPolicy::KeepTarget => {
+                            if first {
+                                report.kept.push(key.clone());
+                            }
+                            out.push(line.clone())
+                        }
                     }
                 }
             }
@@ -261,7 +303,7 @@ pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentP
 
     let extra: Vec<&(String, String)> = source
         .iter()
-        .filter(|(k, _)| !used.contains(k.as_str()))
+        .filter(|(k, _)| !seen.contains(k.as_str()))
         .collect();
     if !extra.is_empty() {
         // One blank separator unless the target already ended blank/empty.
@@ -270,6 +312,7 @@ pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentP
         }
         out.push(Line::Comment("# Added by Envarsa".to_string()));
         for (k, v) in extra {
+            report.added.push(k.clone());
             out.push(Line::Entry {
                 key: k.clone(),
                 value: v.clone(),
@@ -278,7 +321,7 @@ pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentP
         }
     }
 
-    serialize_lines(&out)
+    (serialize_lines(&out), report)
 }
 
 #[cfg(test)]
@@ -463,6 +506,52 @@ mod tests {
             out,
             "# local\nA=keepme\nB=new\n\n# Added by Envarsa\nC=added\n"
         );
+    }
+
+    fn keys(ks: &[&str]) -> Vec<String> {
+        ks.iter().map(|k| k.to_string()).collect()
+    }
+
+    #[test]
+    fn merge_report_partitions_keys_once_each() {
+        // B appears twice in the target: reported once, at first sight.
+        let target = parse("# t\nA=1\nB=2\nexport C=3\nB=4\n");
+        let source = vec![
+            ("B".to_string(), "new".to_string()),
+            ("D".to_string(), "d".to_string()),
+            ("E".to_string(), "e".to_string()),
+        ];
+
+        let (text, r) = merge_with_report(&target, &source, AbsentPolicy::KeepTarget);
+        assert_eq!(text, merge(&target, &source, AbsentPolicy::KeepTarget));
+        assert_eq!(
+            r,
+            MergeReport {
+                added: keys(&["D", "E"]),
+                substituted: keys(&["B"]),
+                emptied: vec![],
+                kept: keys(&["A", "C"]),
+            }
+        );
+
+        let (text, r) = merge_with_report(&target, &source, AbsentPolicy::EmptyOut);
+        assert_eq!(
+            text,
+            "# t\nA=\nB=new\nexport C=\nB=new\n\n# Added by Envarsa\nD=d\nE=e\n"
+        );
+        assert_eq!(r.emptied, keys(&["A", "C"]));
+        assert!(r.kept.is_empty());
+    }
+
+    #[test]
+    fn valid_keys_match_what_the_parser_accepts() {
+        for k in ["A", "DATABASE_URL", "a.b-c", "ключ"] {
+            assert!(is_valid_key(k), "{k}");
+            assert!(matches!(parse(&format!("{k}=1"))[0], Line::Entry { .. }));
+        }
+        for k in ["", "BAD KEY", "A#B", "A\"B", "A'B", "A\tB"] {
+            assert!(!is_valid_key(k), "{k:?}");
+        }
     }
 
     #[test]
