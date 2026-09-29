@@ -1,0 +1,47 @@
+name: Set up the windows-gnu build
+description: >
+  The windows-gnu toolchain the way the README's windows-gnu note describes
+  it, plus the WebView2Loader.dll that tauri-build needs before it will build
+  envarsa at all (even for cargo test). Shared by ci.yml and release.yml.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up windows-gnu toolchain
+      shell: pwsh
+      run: |
+        # MinGW binutils: rustc shells out to dlltool for raw-dylib crates,
+        # and tauri-build's resource step needs windres/as plus an
+        # unprefixed gcc for .rc preprocessing.
+        if (-not (Test-Path 'C:\msys64\mingw64\bin\windres.exe')) {
+          C:\msys64\usr\bin\pacman.exe -S --noconfirm --needed mingw-w64-x86_64-toolchain
+        }
+        Add-Content $env:GITHUB_PATH 'C:\msys64\mingw64\bin'
+
+        # A prefixed x86_64-w64-mingw32-gcc anywhere on PATH would be picked
+        # up as the linker, and its CRT clashes with rustup's bundled MinGW
+        # objects (see README windows-gnu note).
+        $dirs = (($env:PATH -split ';') + 'C:\msys64\mingw64\bin') | Where-Object { $_ }
+        foreach ($dir in $dirs) {
+          foreach ($name in 'gcc', 'cc', 'g++', 'c++') {
+            $alias = Join-Path $dir "x86_64-w64-mingw32-$name.exe"
+            if (Test-Path $alias) { Rename-Item $alias "$alias.disabled" -Force }
+          }
+        }
+
+        rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+        rustup default stable-x86_64-pc-windows-gnu
+
+    - name: Stage WebView2Loader.dll
+      shell: pwsh
+      run: |
+        # tauri.windows.conf.json bundles target/release/WebView2Loader.dll
+        # as a resource, and tauri-build refuses to build envarsa — even the
+        # debug build behind `cargo test` — while that path is missing.
+        # The DLL ships inside the webview2-com-sys crate: build just that
+        # crate so its build script lays the DLL into its OUT_DIR, then
+        # copy it up to the path the resource step expects.
+        cargo build --release --manifest-path src-tauri/Cargo.toml -p webview2-com-sys
+        $dll = Get-ChildItem src-tauri/target/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll |
+          Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        Copy-Item $dll.FullName src-tauri/target/release/WebView2Loader.dll
