@@ -1,0 +1,59 @@
+{
+  "format": "envarsa-store",
+  "version": 1,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "projects": [
+    {
+      "id": "demo-lumen-api",
+      "name": "lumen-api",
+      "path_hint": "C:\\dev\\lumen\\api",
+      "created_at": "2026-01-01T00:00:00Z",
+      "snapshots": [
+        {
+          "id": "demo-lumen-api-1",
+          "captured_at": "2026-01-01T00:00:00Z",
+          "via": "file",
+          "source_path": "C:\\dev\\lumen\\api\\.env",
+          "raw": "# Server\nPORT=3000\nLOG_LEVEL=info\n\n# Database\nDATABASE_URL=postgres://lumen:s3cr3t@localhost:5432/lumen_dev\nREDIS_URL=redis://localhost:6379/0\n"
+        },
+        {
+          "id": "demo-lumen-api-2",
+          "captured_at": "2026-01-01T00:00:00Z",
+          "via": "file",
+          "source_path": "C:\\dev\\lumen\\api\\.env",
+          "raw": "# Server\nPORT=3000\nLOG_LEVEL=debug\n\n# Database\nDATABASE_URL=postgres://lumen:s3cr3t@localhost:5432/lumen_dev\nREDIS_URL=redis://localhost:6379/0\n\n# Auth\nJWT_SECRET=9f1c4f5a2e6b48d3a7c0e9b1d8f24a61\nSESSION_TTL_HOURS=72\n\n# Stripe (test mode)\nSTRIPE_SECRET_KEY=sk_test_demo-not-a-real-key\nSTRIPE_WEBHOOK_SECRET=whsec_8a2f0d9c1b3e4f5a6d7c8b9a0e1f2d3c\n\n# Observability\nSENTRY_DSN=https://e1f2a3b4c5d6@o447951.ingest.sentry.io/5901247\n"
+        }
+      ]
+    },
+    {
+      "id": "demo-lumen-web",
+      "name": "lumen-web",
+      "path_hint": "C:\\dev\\lumen\\web",
+      "created_at": "2026-01-01T00:00:00Z",
+      "snapshots": [
+        {
+          "id": "demo-lumen-web-1",
+          "captured_at": "2026-01-01T00:00:00Z",
+          "via": "file",
+          "source_path": "C:\\dev\\lumen\\web\\.env",
+          "raw": "VITE_API_URL=http://localhost:3000\nVITE_STRIPE_PUBLISHABLE_KEY=pk_test_TYooMQauvdEDq54NiTphI7jx\nLOG_LEVEL=warn\nSENTRY_DSN=https://e1f2a3b4c5d6@o447951.ingest.sentry.io/5901247\n"
+        }
+      ]
+    },
+    {
+      "id": "demo-tooling-scripts",
+      "name": "tooling-scripts",
+      "path_hint": "C:\\dev\\tooling",
+      "created_at": "2026-01-01T00:00:00Z",
+      "snapshots": [
+        {
+          "id": "demo-tooling-scripts-1",
+          "captured_at": "2026-01-01T00:00:00Z",
+          "via": "paste",
+          "raw": "# Personal automation\nGITHUB_TOKEN=ghp_demo-not-a-real-token\nOPENAI_API_KEY=sk-proj-demo-not-a-real-key-000000000000\nDATABASE_URL=postgres://tools:tools@localhost:5432/scratch\n"
+        }
+      ]
+    }
+  ]
+}

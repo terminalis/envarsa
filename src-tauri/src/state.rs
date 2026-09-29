@@ -12,7 +12,7 @@
 //! In a portable build `config.json` lives beside the exe too, so the
 //! whole library — preferences included — travels as one folder.
 
-use crate::store::{self, Opened, Project, Snapshot, Store};
+use crate::store::{self, Opened, Snapshot, Store};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -277,6 +277,24 @@ pub fn init_session(store_path: &Path) -> Session {
     }
 }
 
+/// The sample library ENVARSA_DEMO seeds, stored as an ordinary store
+/// file. Ids and timestamps are minted fresh on each load.
+fn demo_projects() -> Vec<store::Project> {
+    let demo = store::parse_store(include_str!("../demo.json").as_bytes())
+        .expect("demo.json is a valid store");
+    demo.projects
+        .into_iter()
+        .map(|mut p| {
+            p.id = store::new_id();
+            p.created_at = store::now_iso();
+            for s in &mut p.snapshots {
+                *s = Snapshot::new(&s.via, s.source_path.take(), std::mem::take(&mut s.raw));
+            }
+            p
+        })
+        .collect()
+}
+
 /// When ENVARSA_DEMO is set and the store is empty, seed a few sample
 /// projects. Used for screenshots and trying the app out — never runs
 /// against a store that already has data.
@@ -284,68 +302,13 @@ pub fn maybe_seed_demo(session: &mut Session, store_path: &Path) {
     if std::env::var("ENVARSA_DEMO").is_err() {
         return;
     }
-    let Session::Unlocked { store, passphrase } = session else {
+    let Ok((store, passphrase)) = session.unlocked_mut() else {
         return;
     };
     if !store.projects.is_empty() {
         return;
     }
-
-    let mut add = |name: &str, hint: &str, raws: &[(&str, &str)]| {
-        let snapshots = raws
-            .iter()
-            .map(|(via, raw)| Snapshot {
-                id: store::new_id(),
-                captured_at: store::now_iso(),
-                via: via.to_string(),
-                source_path: if *via == "file" {
-                    Some(format!("{hint}\\.env"))
-                } else {
-                    None
-                },
-                raw: raw.to_string(),
-            })
-            .collect();
-        store.projects.push(Project {
-            id: store::new_id(),
-            name: name.to_string(),
-            path_hint: Some(hint.to_string()),
-            created_at: store::now_iso(),
-            snapshots,
-        });
-    };
-
-    add(
-        "lumen-api",
-        "C:\\dev\\lumen\\api",
-        &[
-            (
-                "file",
-                "# Server\nPORT=3000\nLOG_LEVEL=info\n\n# Database\nDATABASE_URL=postgres://lumen:s3cr3t@localhost:5432/lumen_dev\nREDIS_URL=redis://localhost:6379/0\n",
-            ),
-            (
-                "file",
-                "# Server\nPORT=3000\nLOG_LEVEL=debug\n\n# Database\nDATABASE_URL=postgres://lumen:s3cr3t@localhost:5432/lumen_dev\nREDIS_URL=redis://localhost:6379/0\n\n# Auth\nJWT_SECRET=9f1c4f5a2e6b48d3a7c0e9b1d8f24a61\nSESSION_TTL_HOURS=72\n\n# Stripe (test mode)\nSTRIPE_SECRET_KEY=sk_test_demo-not-a-real-key\nSTRIPE_WEBHOOK_SECRET=whsec_8a2f0d9c1b3e4f5a6d7c8b9a0e1f2d3c\n\n# Observability\nSENTRY_DSN=https://e1f2a3b4c5d6@o447951.ingest.sentry.io/5901247\n",
-            ),
-        ],
-    );
-    add(
-        "lumen-web",
-        "C:\\dev\\lumen\\web",
-        &[(
-            "file",
-            "VITE_API_URL=http://localhost:3000\nVITE_STRIPE_PUBLISHABLE_KEY=pk_test_TYooMQauvdEDq54NiTphI7jx\nLOG_LEVEL=warn\nSENTRY_DSN=https://e1f2a3b4c5d6@o447951.ingest.sentry.io/5901247\n",
-        )],
-    );
-    add(
-        "tooling-scripts",
-        "C:\\dev\\tooling",
-        &[(
-            "paste",
-            "# Personal automation\nGITHUB_TOKEN=ghp_demo-not-a-real-token\nOPENAI_API_KEY=sk-proj-demo-not-a-real-key-000000000000\nDATABASE_URL=postgres://tools:tools@localhost:5432/scratch\n",
-        )],
-    );
-
+    store.projects = demo_projects();
     let pass = passphrase.clone();
     let _ = store::save(store, store_path, pass.as_deref());
 }
@@ -530,6 +493,28 @@ mod tests {
         fs::write(&path, "{ not json").unwrap();
         assert!(matches!(init_session(&path), Session::Corrupt { .. }));
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn demo_seed_matches_the_sample_library() {
+        let projects = demo_projects();
+        let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["lumen-api", "lumen-web", "tooling-scripts"]);
+        let api = &projects[0];
+        assert_eq!(api.path_hint.as_deref(), Some("C:\\dev\\lumen\\api"));
+        assert_eq!(api.snapshots.len(), 2);
+        assert_eq!(
+            api.snapshots[1].source_path.as_deref(),
+            Some("C:\\dev\\lumen\\api\\.env")
+        );
+        assert!(api.snapshots[1].raw.contains("JWT_SECRET="));
+        assert_eq!(projects[2].snapshots[0].via, "paste");
+        assert_eq!(projects[2].snapshots[0].source_path, None);
+        assert_ne!(
+            demo_projects()[0].id,
+            api.id,
+            "each seeding mints fresh ids"
+        );
     }
 
     fn inner() -> Inner {
