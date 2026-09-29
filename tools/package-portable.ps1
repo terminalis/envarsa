@@ -1,29 +1,22 @@
 # Packages the portable Windows build: envarsa.exe + WebView2Loader.dll +
 # an envarsa.portable marker, zipped as envarsa_<version>_x64_portable.zip
-# (version from tauri.conf.json). The marker makes the unzipped folder
+# (version from src-tauri/Cargo.toml). The marker makes the unzipped folder
 # self-contained: with it beside the exe, Envarsa keeps config.json and the
 # store file in that folder instead of %APPDATA%.
-# Run after `npm run build`; needs no toolchain, just Windows PowerShell.
+# Run after `npm run build`.
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$conf = Get-Content (Join-Path $root 'src-tauri\tauri.conf.json') -Raw | ConvertFrom-Json
-$version = $conf.version
+$metadata = cargo metadata --no-deps --format-version 1 --manifest-path (Join-Path $root 'src-tauri\Cargo.toml') |
+    ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw "cargo metadata failed (exit $LASTEXITCODE)" }
+$version = ($metadata.packages | Where-Object name -eq 'envarsa').version
 
-# The release dir moves when cargo gets an explicit --target; if both exist,
-# package whichever exe was built most recently.
-$releaseDir = @(
-    Join-Path $root 'src-tauri\target\release'
-    Join-Path $root 'src-tauri\target\x86_64-pc-windows-gnu\release'
-) |
-    Where-Object { Test-Path (Join-Path $_ 'envarsa.exe') } |
-    Sort-Object { (Get-Item (Join-Path $_ 'envarsa.exe')).LastWriteTime } -Descending |
-    Select-Object -First 1
-if (-not $releaseDir) {
-    throw "envarsa.exe not found in any release dir - run 'npm run build' first."
-}
-
+$releaseDir = Join-Path $root 'src-tauri\target\release'
 $exe = Join-Path $releaseDir 'envarsa.exe'
+if (-not (Test-Path $exe)) {
+    throw "$exe not found - run 'npm run build' first."
+}
 $dll = Join-Path $releaseDir 'WebView2Loader.dll'
 if (-not (Test-Path $dll)) {
     throw "WebView2Loader.dll missing next to $exe - the portable exe cannot run without it."

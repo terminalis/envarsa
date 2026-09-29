@@ -2,14 +2,13 @@
 # release build. The Store re-signs the package with a Microsoft certificate
 # on ingestion, so this package must NOT be Authenticode-signed.
 #
-# Prereqs: release binary built (npm run build, or cargo build --release) and
-# real Assets present (tools\generate-msix-assets.ps1). Windows SDK provides
-# makeappx.exe.
+# Prereqs: release binary built (npm run build, or cargo build --release).
+# Windows SDK provides makeappx.exe.
 #
 #   pwsh tools\package-msix.ps1                 # version from Package.appxmanifest
-#   pwsh tools\package-msix.ps1 -Version 1.2.3  # override (CI passes tauri.conf.json's version)
+#   pwsh tools\package-msix.ps1 -Version 1.2.3  # override (CI passes Cargo.toml's version)
 #
-# -Version sets the package version (normalized to 4-part X.Y.Z.0; the Store
+# -Version takes X.Y.Z and sets the package version to X.Y.Z.0 (the Store
 # reserves the 4th part) WITHOUT editing the committed manifest, so CI keeps the
 # MSIX version locked to the release tag with a single source of truth.
 param([string]$Version)
@@ -20,9 +19,7 @@ $manifest = Join-Path $root 'Package.appxmanifest'
 $arch = 'x64'
 
 if ($Version) {
-  $p = @($Version.Split('.'))
-  while ($p.Count -lt 4) { $p += '0' }
-  $ver = '{0}.{1}.{2}.0' -f $p[0], $p[1], $p[2]
+  $ver = "$Version.0"
 } else {
   $ver = ([xml](Get-Content $manifest -Raw)).Package.Identity.Version
 }
@@ -35,12 +32,6 @@ if (-not $makeappx) { throw 'makeappx.exe not found. Install the Windows SDK (Ap
 
 foreach ($f in @((Join-Path $rel 'envarsa.exe'), (Join-Path $rel 'WebView2Loader.dll'))) {
   if (-not (Test-Path $f)) { throw "Missing build artifact: $f (run the release build first)." }
-}
-
-# Guard against shipping placeholder tiles (the scaffold PNGs are tiny).
-$store = Get-Item (Join-Path $root 'Assets\StoreLogo.png') -ErrorAction SilentlyContinue
-if (-not $store -or $store.Length -lt 600) {
-  Write-Warning ('Assets\StoreLogo.png is missing or looks like a placeholder ({0} bytes). Run tools\generate-msix-assets.ps1 first.' -f $store.Length)
 }
 
 # Assemble a clean payload (do not reuse dist\ to avoid stale files).
