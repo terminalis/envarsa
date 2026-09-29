@@ -37,11 +37,8 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
 
 ## Layout
 
-```
-ui/         no-build frontend (ES modules, withGlobalTauri; mock.js = browser-preview stub)
-src-tauri/  Rust core: envfile.rs (parse/serialize/merge), envpath.rs (.env*.local guard),
-            store.rs (atomic persistence), crypto.rs (age), commands.rs (IPC), state.rs (session)
-```
+`ui/` is the no-build frontend and `src-tauri/` the Rust core. [ARCHITECTURE.md](ARCHITECTURE.md) maps every
+module, follows a request from the webview to disk, and names the rules the code keeps.
 
 ## License
 
