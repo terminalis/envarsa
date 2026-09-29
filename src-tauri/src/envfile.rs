@@ -227,18 +227,16 @@ pub enum AbsentPolicy {
 /// keys (source order) under one attribution comment.
 pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
     use std::collections::{HashMap, HashSet};
-    let source_map: HashMap<&str, &str> =
-        source.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let source_map: HashMap<&str, &str> = source
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
     let mut used: HashSet<&str> = HashSet::new();
 
     let mut out: Vec<Line> = Vec::with_capacity(target_lines.len() + source.len() + 2);
     for line in target_lines {
         match line {
-            Line::Entry {
-                key,
-                exported,
-                ..
-            } => {
+            Line::Entry { key, exported, .. } => {
                 if let Some(sv) = source_map.get(key.as_str()) {
                     used.insert(key.as_str());
                     out.push(Line::Entry {
@@ -304,7 +302,10 @@ mod tests {
         let lines = parse(raw);
         assert_eq!(lines.len(), 4);
         assert_eq!(lines[0], Line::Comment("# Database".into()));
-        assert_eq!(entry(&lines, 1), ("DATABASE_URL", "postgres://localhost/dev", false));
+        assert_eq!(
+            entry(&lines, 1),
+            ("DATABASE_URL", "postgres://localhost/dev", false)
+        );
         assert_eq!(lines[2], Line::Blank);
         assert_eq!(entry(&lines, 3), ("PORT", "3000", false));
     }
@@ -357,7 +358,10 @@ mod tests {
     fn effective_entries_last_wins_first_seen_order() {
         let lines = parse("A=1\nB=2\nA=3");
         let eff = effective_entries(&lines);
-        assert_eq!(eff, vec![("A".into(), "3".into()), ("B".into(), "2".into())]);
+        assert_eq!(
+            eff,
+            vec![("A".into(), "3".into()), ("B".into(), "2".into())]
+        );
         assert_eq!(entry_count("A=1\nB=2\nA=3"), 2);
     }
 
@@ -403,9 +407,16 @@ mod tests {
     fn serialize_line_is_verbatim_for_non_entries_and_honors_export() {
         assert_eq!(serialize_line(&Line::Blank), "");
         assert_eq!(serialize_line(&Line::Comment("# note".into())), "# note");
-        assert_eq!(serialize_line(&Line::Bad("Authorization: Bearer x".into())), "Authorization: Bearer x");
         assert_eq!(
-            serialize_line(&Line::Entry { key: "R".into(), value: "eu".into(), exported: true }),
+            serialize_line(&Line::Bad("Authorization: Bearer x".into())),
+            "Authorization: Bearer x"
+        );
+        assert_eq!(
+            serialize_line(&Line::Entry {
+                key: "R".into(),
+                value: "eu".into(),
+                exported: true
+            }),
             "export R=eu"
         );
     }
@@ -423,7 +434,10 @@ mod tests {
         let out = merge(&example, &source, AbsentPolicy::EmptyOut);
         assert_eq!(out, "# header\nAPI_KEY=real-secret\nPORT=\n");
         assert!(!out.contains("changeme"), "placeholder must not leak");
-        assert!(!out.contains("3000"), "unfilled placeholder must be blanked");
+        assert!(
+            !out.contains("3000"),
+            "unfilled placeholder must be blanked"
+        );
     }
 
     #[test]
@@ -445,13 +459,19 @@ mod tests {
             ("C".to_string(), "added".to_string()),
         ];
         let out = merge(&target, &source, AbsentPolicy::KeepTarget);
-        assert_eq!(out, "# local\nA=keepme\nB=new\n\n# Added by Envarsa\nC=added\n");
+        assert_eq!(
+            out,
+            "# local\nA=keepme\nB=new\n\n# Added by Envarsa\nC=added\n"
+        );
     }
 
     #[test]
     fn merge_preserves_export_and_skips_header_when_no_extras() {
         let target = parse("export TOKEN=old\n");
         let source = vec![("TOKEN".to_string(), "new".to_string())];
-        assert_eq!(merge(&target, &source, AbsentPolicy::KeepTarget), "export TOKEN=new\n");
+        assert_eq!(
+            merge(&target, &source, AbsentPolicy::KeepTarget),
+            "export TOKEN=new\n"
+        );
     }
 }

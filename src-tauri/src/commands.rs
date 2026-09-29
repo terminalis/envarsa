@@ -5,10 +5,10 @@
 //! values. "Copy" hands a value straight from the core to the OS
 //! clipboard without it ever transiting the UI.
 
+use crate::crypto;
 use crate::envfile::{self, Line};
 use crate::state::{self, AppState, Inner, Session};
 use crate::store::{self, Project, Snapshot, Store};
-use crate::crypto;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,8 +23,13 @@ fn selftest_active() -> bool {
 }
 
 fn with_inner<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Inner) -> R<T>) -> R<T> {
-    let mut guard = state.0.lock().map_err(|_| "internal: state poisoned".to_string())?;
-    let inner = guard.as_mut().ok_or_else(|| "app is still starting".to_string())?;
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "internal: state poisoned".to_string())?;
+    let inner = guard
+        .as_mut()
+        .ok_or_else(|| "app is still starting".to_string())?;
     f(inner)
 }
 
@@ -60,9 +65,7 @@ fn mutate<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Store) -> R<T>) ->
                 }
             }
             Session::Locked => Err("the store is locked".into()),
-            Session::Corrupt { error } => {
-                Err(format!("the store could not be loaded: {error}"))
-            }
+            Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
         }
     })
 }
@@ -144,8 +147,8 @@ pub fn store_status(app: AppHandle, state: State<'_, AppState>) -> R<StatusPaylo
 #[tauri::command]
 pub fn unlock(state: State<'_, AppState>, passphrase: String) -> R<()> {
     with_inner(&state, |inner| {
-        let bytes = fs::read(&inner.store_path)
-            .map_err(|e| format!("could not read store file: {e}"))?;
+        let bytes =
+            fs::read(&inner.store_path).map_err(|e| format!("could not read store file: {e}"))?;
         if crypto::is_encrypted(&bytes) {
             let plain = crypto::decrypt(&bytes, &passphrase)?;
             let s = store::parse_store(&plain)?;
@@ -319,7 +322,10 @@ pub fn get_project(
                 .latest()
                 .ok_or_else(|| "project has no snapshots".to_string())?,
         };
-        let is_latest = project.latest().map(|s| s.id == snapshot.id).unwrap_or(false);
+        let is_latest = project
+            .latest()
+            .map(|s| s.id == snapshot.id)
+            .unwrap_or(false);
 
         // Other projects' current entries, for reuse flags.
         let others: Vec<(&Project, Vec<(String, String)>)> = store
@@ -354,11 +360,14 @@ pub fn get_project(
                     let reuse = others
                         .iter()
                         .filter_map(|(p, entries)| {
-                            entries.iter().find(|(k, _)| k == key).map(|(_, v)| ReuseRef {
-                                project_id: p.id.clone(),
-                                name: p.name.clone(),
-                                same: v == value,
-                            })
+                            entries
+                                .iter()
+                                .find(|(k, _)| k == key)
+                                .map(|(_, v)| ReuseRef {
+                                    project_id: p.id.clone(),
+                                    name: p.name.clone(),
+                                    same: v == value,
+                                })
                         })
                         .collect();
                     LineView::Entry {
@@ -587,7 +596,9 @@ fn append_snapshot(
 }
 
 fn trimmed_hint(hint: Option<&str>) -> Option<String> {
-    hint.map(str::trim).filter(|s| !s.is_empty()).map(String::from)
+    hint.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
 }
 
 #[tauri::command]
@@ -753,11 +764,7 @@ pub fn copy_value(
 
 /// Copies the whole snapshot block (raw bytes, exactly as captured).
 #[tauri::command]
-pub fn copy_block(
-    state: State<'_, AppState>,
-    project_id: String,
-    snapshot_id: String,
-) -> R<usize> {
+pub fn copy_block(state: State<'_, AppState>, project_id: String, snapshot_id: String) -> R<usize> {
     with_store(&state, |store| {
         let project = store
             .project(&project_id)
@@ -944,11 +951,7 @@ fn guard_writable_local(path: &Path) -> R<()> {
     }
 }
 
-fn stage_write(
-    state: &State<'_, AppState>,
-    path: PathBuf,
-    template: Option<String>,
-) -> R<String> {
+fn stage_write(state: &State<'_, AppState>, path: PathBuf, template: Option<String>) -> R<String> {
     with_inner(state, |inner| Ok(inner.stage_write(path, template)))
 }
 
@@ -1350,14 +1353,18 @@ pub fn write_example_scaffold(
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EditLine {
     Blank,
-    Comment { text: String },
+    Comment {
+        text: String,
+    },
     #[serde(rename_all = "camelCase")]
     Entry {
         key: String,
         value: String,
         exported: bool,
     },
-    Bad { raw: String },
+    Bad {
+        raw: String,
+    },
 }
 
 fn edit_line_to_line(e: &EditLine) -> Line {
@@ -1618,7 +1625,9 @@ pub fn change_passphrase(
                 }
                 // Don't leave a backup that the old passphrase still opens.
                 store::align_backup(&path).map_err(|e| {
-                    format!("the passphrase was changed, but the backup still uses the old one — {e}")
+                    format!(
+                        "the passphrase was changed, but the backup still uses the old one — {e}"
+                    )
                 })
             }
             _ => Err("encryption is not enabled".into()),
@@ -1675,8 +1684,7 @@ pub async fn relocate_store(app: AppHandle, state: State<'_, AppState>) -> R<Opt
     })?;
     if env_override {
         return Err(
-            "the store location is currently forced by ENVARSA_STORE_PATH — unset it first"
-                .into(),
+            "the store location is currently forced by ENVARSA_STORE_PATH — unset it first".into(),
         );
     }
 
@@ -1728,10 +1736,7 @@ pub struct UpdateCheckResult {
 /// back as errors for the settings modal to show inline. The request
 /// itself lives in update.rs, the app's entire network surface.
 #[tauri::command]
-pub async fn check_for_updates(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> R<UpdateCheckResult> {
+pub async fn check_for_updates(app: AppHandle, state: State<'_, AppState>) -> R<UpdateCheckResult> {
     if selftest_active() {
         return Err("update checks are disabled during selftest".into());
     }
@@ -1949,7 +1954,9 @@ pub fn apply_import(
     let (_, parsed) = read_import_file(&path, passphrase.as_deref())?;
     let incoming =
         parsed.ok_or_else(|| "that store is encrypted — its passphrase is needed".to_string())?;
-    mutate(&state, |store| store::merge_import(store, incoming, &decisions))
+    mutate(&state, |store| {
+        store::merge_import(store, incoming, &decisions)
+    })
 }
 
 /// Restoring is only offered (and only allowed) when the store cannot
@@ -1960,7 +1967,10 @@ pub fn apply_import(
 pub fn restore_backup(app: AppHandle, state: State<'_, AppState>) -> R<StatusPayload> {
     with_inner(&state, |inner| {
         if !matches!(inner.session, Session::Corrupt { .. }) {
-            return Err("the store loaded fine — restoring the backup is only for when it cannot be read".into());
+            return Err(
+                "the store loaded fine — restoring the backup is only for when it cannot be read"
+                    .into(),
+            );
         }
         let bak = store::backup_path(&inner.store_path);
         if !bak.exists() {

@@ -17,8 +17,7 @@ use tauri::{Emitter, Manager};
 /// Opened in the browser when an update is found. A compile-time
 /// constant — nothing fetched ever becomes a link.
 pub const RELEASES_PAGE_URL: &str = "https://github.com/terminalis/envarsa/releases/latest";
-const LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/terminalis/envarsa/releases/latest";
+const LATEST_RELEASE_API: &str = "https://api.github.com/repos/terminalis/envarsa/releases/latest";
 const TIMEOUT: Duration = Duration::from_secs(8);
 /// The release JSON is ~10-30 KB; cap reads hard anyway.
 const MAX_BODY_BYTES: u64 = 256 * 1024;
@@ -168,7 +167,9 @@ pub fn maybe_spawn_auto_check(app: tauri::AppHandle) {
             return;
         }
 
-        let Ok(latest) = fetch_latest_version() else { return };
+        let Ok(latest) = fetch_latest_version() else {
+            return;
+        };
         let newer = latest > app.package_info().version;
 
         {
@@ -207,7 +208,10 @@ mod tests {
         assert!(parse_tag("nightly").is_err());
         assert!(parse_tag("v1.2").is_err());
         assert!(parse_tag("1.2.3.4").is_err());
-        assert!(parse_tag(&"v1.0.0".repeat(20)).is_err(), "over-long tags refused");
+        assert!(
+            parse_tag(&"v1.0.0".repeat(20)).is_err(),
+            "over-long tags refused"
+        );
     }
 
     #[test]

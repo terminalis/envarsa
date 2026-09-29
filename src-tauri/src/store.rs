@@ -94,10 +94,13 @@ pub fn new_id() -> String {
 }
 
 pub fn parse_store(bytes: &[u8]) -> Result<Store, String> {
-    let store: Store = serde_json::from_slice(bytes)
-        .map_err(|e| format!("store file is not valid JSON: {e}"))?;
+    let store: Store =
+        serde_json::from_slice(bytes).map_err(|e| format!("store file is not valid JSON: {e}"))?;
     if store.format != FORMAT {
-        return Err(format!("not an Envarsa store (format: \"{}\")", store.format));
+        return Err(format!(
+            "not an Envarsa store (format: \"{}\")",
+            store.format
+        ));
     }
     if store.version > VERSION {
         return Err(format!(
@@ -190,7 +193,10 @@ pub fn merge_import(
             .iter()
             .find(|d| norm(&d.name) == norm(&project.name))
             .ok_or_else(|| {
-                format!("no decision for incoming project \"{}\"", project.name.trim())
+                format!(
+                    "no decision for incoming project \"{}\"",
+                    project.name.trim()
+                )
             })?;
         let exists = store.project_by_name(&project.name).is_some();
         let final_name = match decision.action {
@@ -258,7 +264,9 @@ pub fn merge_import(
         }
     }
 
-    store.projects.retain(|p| !replaced.contains(&norm(&p.name)));
+    store
+        .projects
+        .retain(|p| !replaced.contains(&norm(&p.name)));
     for pl in planned {
         let mut project = pl.project;
         project.id = new_id();
@@ -313,8 +321,7 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 /// replace the target.
 pub fn write_store_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if path.exists() {
-        fs::copy(path, backup_path(path))
-            .map_err(|e| format!("could not write backup: {e}"))?;
+        fs::copy(path, backup_path(path)).map_err(|e| format!("could not write backup: {e}"))?;
     }
     write_atomic(path, bytes)
 }
@@ -396,7 +403,10 @@ mod tests {
         assert!(!backup_path(&path).exists(), "no backup on first write");
 
         save(&mut s, &path, None).unwrap();
-        assert!(backup_path(&path).exists(), "backup exists after second write");
+        assert!(
+            backup_path(&path).exists(),
+            "backup exists after second write"
+        );
 
         fs::remove_dir_all(dir).ok();
     }
@@ -441,7 +451,10 @@ mod tests {
         );
         align_backup(&path).unwrap();
         let bak_bytes = fs::read(&bak).unwrap();
-        assert!(crate::crypto::is_encrypted(&bak_bytes), "backup re-encrypted");
+        assert!(
+            crate::crypto::is_encrypted(&bak_bytes),
+            "backup re-encrypted"
+        );
         assert!(crate::crypto::decrypt(&bak_bytes, "first-pass-123").is_ok());
 
         // Change passphrase: the backup must not stay readable with the
@@ -552,7 +565,11 @@ mod tests {
         let sum = merge_import(
             &mut mine,
             incoming,
-            &[decide("alpha", ImportAction::Rename, Some("alpha (imported)"))],
+            &[decide(
+                "alpha",
+                ImportAction::Rename,
+                Some("alpha (imported)"),
+            )],
         )
         .unwrap();
         assert_eq!(sum.renamed, 1);
@@ -561,7 +578,10 @@ mod tests {
             mine.project_by_name("alpha (imported)").unwrap().snapshots[0].raw,
             "A=2\n"
         );
-        assert_eq!(mine.project_by_name("alpha").unwrap().snapshots[0].raw, "A=1\n");
+        assert_eq!(
+            mine.project_by_name("alpha").unwrap().snapshots[0].raw,
+            "A=1\n"
+        );
     }
 
     #[test]
@@ -608,12 +628,8 @@ mod tests {
         assert!(err.contains("nothing to replace"), "got: {err}");
 
         // Missing decision.
-        let err = merge_import(
-            &mut mine,
-            store_of(vec![project("gamma", "X=1\n")]),
-            &[],
-        )
-        .unwrap_err();
+        let err =
+            merge_import(&mut mine, store_of(vec![project("gamma", "X=1\n")]), &[]).unwrap_err();
         assert!(err.contains("no decision"), "got: {err}");
 
         // Duplicate names inside the incoming file.
@@ -627,7 +643,10 @@ mod tests {
 
         // Nothing mutated by any of the failures.
         assert_eq!(mine.projects.len(), 2);
-        assert_eq!(mine.project_by_name("alpha").unwrap().snapshots[0].raw, "A=1\n");
+        assert_eq!(
+            mine.project_by_name("alpha").unwrap().snapshots[0].raw,
+            "A=1\n"
+        );
     }
 
     #[test]

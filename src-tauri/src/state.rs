@@ -12,8 +12,8 @@
 //! In a portable build `config.json` lives beside the exe too, so the
 //! whole library — preferences included — travels as one folder.
 
-use crate::store::{self, Project, Snapshot, Store};
 use crate::crypto;
+use crate::store::{self, Project, Snapshot, Store};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
