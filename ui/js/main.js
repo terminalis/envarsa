@@ -650,17 +650,27 @@ const ACTIONS = {
     renderModal();
   },
   'delete-confirm': run(async () => {
-    S.modal.busy = true;
+    const m = S.modal;
+    if (m?.kind !== 'delete' || m.busy) return;
+    m.busy = true;
     renderModal();
-    const name = S.modal.name;
-    await api.deleteProject(S.selId);
-    S.modal = null;
-    S.selId = null;
-    localStorage.removeItem('envarsa.sel');
-    await refreshAfterMutation({ keepView: false });
-    if (S.selId) await loadView();
-    render();
-    toast(`Deleted ${name} from the library`);
+    try {
+      await api.deleteProject(S.selId);
+      S.modal = null;
+      S.selId = null;
+      localStorage.removeItem('envarsa.sel');
+      await refreshAfterMutation({ keepView: false });
+      if (S.selId) await loadView();
+      render();
+      toast(`Deleted ${m.name} from the library`);
+    } finally {
+      // A failed delete must not leave the modal busy: busy modals
+      // refuse Close, Escape, and the scrim.
+      if (S.modal?.kind === 'delete') {
+        S.modal.busy = false;
+        renderModal();
+      }
+    }
   }),
 
   lock: run(async () => {
