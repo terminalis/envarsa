@@ -20,6 +20,11 @@ cd src-tauri && cargo test
 End-to-end selftest: `ENVARSA_SELFTEST=1 ENVARSA_STORE_PATH=/tmp/st.envarsa ./target/debug/envarsa`.
 `ENVARSA_STORE_PATH` overrides the store location; `ENVARSA_DEMO=1` seeds sample projects.
 
+The app version lives only in `src-tauri/Cargo.toml`; Tauri and the release workflow read it from there.
+`src-tauri/icons/` keeps just the icons the bundles use. `npx tauri icon <source.png>` regenerates the full set
+(including iOS, Android and macOS files this project doesn't ship); commit only the ones `tauri.conf.json`
+lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
+
 **Windows build notes**
 
 - Fresh clone: `tauri.windows.conf.json` bundles `target/release/WebView2Loader.dll` as a resource, and
