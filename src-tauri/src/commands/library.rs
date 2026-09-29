@@ -3,6 +3,7 @@ use crate::envfile::{self, Line};
 use crate::state::{AppState, Session};
 use crate::store::{self, Project, Snapshot, Store};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -21,42 +22,57 @@ pub struct ProjectMeta {
     pub shared_keys: usize,
 }
 
+/// Every project's current entries (from its latest snapshot), by key:
+/// which projects hold each key, in store order, and with what value.
+/// Answers both the shared-key counts and the reuse badges.
+type KeyIndex<'a> = HashMap<String, Vec<(&'a Project, String)>>;
+
+fn key_index(store: &Store) -> KeyIndex<'_> {
+    let mut index = KeyIndex::new();
+    for p in &store.projects {
+        for (key, value) in latest_effective(p) {
+            index.entry(key).or_default().push((p, value));
+        }
+    }
+    index
+}
+
+/// The library listing, sorted by name.
+fn project_metas(store: &Store) -> Vec<ProjectMeta> {
+    // Per project id: (entry count, keys another project also holds).
+    let mut counts: HashMap<&str, (usize, usize)> = HashMap::new();
+    for holders in key_index(store).values() {
+        for (p, _) in holders {
+            let c = counts.entry(p.id.as_str()).or_default();
+            c.0 += 1;
+            if holders.iter().any(|(other, _)| other.id != p.id) {
+                c.1 += 1;
+            }
+        }
+    }
+    let mut metas: Vec<ProjectMeta> = store
+        .projects
+        .iter()
+        .map(|p| {
+            let (entry_count, shared_keys) = counts.get(p.id.as_str()).copied().unwrap_or_default();
+            ProjectMeta {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                path_hint: p.path_hint.clone(),
+                snapshot_count: p.snapshots.len(),
+                entry_count,
+                latest_captured_at: p.latest().map(|s| s.captured_at.clone()),
+                shared_keys,
+            }
+        })
+        .collect();
+    metas.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    metas
+}
+
 #[tauri::command]
 pub fn list_projects(state: State<'_, AppState>) -> R<Vec<ProjectMeta>> {
-    with_store(&state, |store| {
-        let all_effective: Vec<(String, Vec<(String, String)>)> = store
-            .projects
-            .iter()
-            .map(|p| (p.id.clone(), latest_effective(p)))
-            .collect();
-
-        let mut metas: Vec<ProjectMeta> = store
-            .projects
-            .iter()
-            .map(|p| {
-                let mine = latest_effective(p);
-                let shared = mine
-                    .iter()
-                    .filter(|(k, _)| {
-                        all_effective.iter().any(|(other_id, entries)| {
-                            other_id != &p.id && entries.iter().any(|(ok, _)| ok == k)
-                        })
-                    })
-                    .count();
-                ProjectMeta {
-                    id: p.id.clone(),
-                    name: p.name.clone(),
-                    path_hint: p.path_hint.clone(),
-                    snapshot_count: p.snapshots.len(),
-                    entry_count: mine.len(),
-                    latest_captured_at: p.latest().map(|s| s.captured_at.clone()),
-                    shared_keys: shared,
-                }
-            })
-            .collect();
-        metas.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-        Ok(metas)
-    })
+    with_store(&state, |store| Ok(project_metas(store)))
 }
 
 #[derive(Serialize)]
@@ -132,18 +148,11 @@ pub fn get_project(
             .map(|s| s.id == snapshot.id)
             .unwrap_or(false);
 
-        // Other projects' current entries, for reuse flags.
-        let others: Vec<(&Project, Vec<(String, String)>)> = store
-            .projects
-            .iter()
-            .filter(|p| p.id != project.id)
-            .map(|p| (p, latest_effective(p)))
-            .collect();
-
+        let index = key_index(store);
         let lines = envfile::parse(&snapshot.raw);
 
         // Which keys are overridden by a later line in this snapshot?
-        let mut last_idx: std::collections::HashMap<&str, usize> = Default::default();
+        let mut last_idx: HashMap<&str, usize> = HashMap::new();
         for (i, line) in lines.iter().enumerate() {
             if let Line::Entry { key, .. } = line {
                 last_idx.insert(key.as_str(), i);
@@ -162,17 +171,15 @@ pub fn get_project(
                     value,
                     exported,
                 } => {
-                    let reuse = others
-                        .iter()
-                        .filter_map(|(p, entries)| {
-                            entries
-                                .iter()
-                                .find(|(k, _)| k == key)
-                                .map(|(_, v)| ReuseRef {
-                                    project_id: p.id.clone(),
-                                    name: p.name.clone(),
-                                    same: v == value,
-                                })
+                    let reuse = index
+                        .get(key)
+                        .into_iter()
+                        .flatten()
+                        .filter(|(p, _)| p.id != project.id)
+                        .map(|(p, v)| ReuseRef {
+                            project_id: p.id.clone(),
+                            name: p.name.clone(),
+                            same: v == value,
                         })
                         .collect();
                     LineView::Entry {
@@ -559,6 +566,37 @@ pub fn promote_snapshot(
 mod tests {
     use super::*;
     use crate::store::fixtures::{project, store_of};
+
+    #[test]
+    fn metas_count_entries_and_keys_shared_with_other_projects() {
+        let store = store_of(vec![
+            project("web", "A=1\nB=2\nA=3\n"),
+            project("api", "B=2\nC=3\n"),
+            project("Tools", "D=4\n"),
+        ]);
+        let metas = project_metas(&store);
+        let row = |name: &str| metas.iter().find(|m| m.name == name).unwrap();
+        let names: Vec<&str> = metas.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(names, ["api", "Tools", "web"], "sorted case-insensitively");
+        assert_eq!((row("web").entry_count, row("web").shared_keys), (2, 1));
+        assert_eq!((row("api").entry_count, row("api").shared_keys), (2, 1));
+        assert_eq!((row("Tools").entry_count, row("Tools").shared_keys), (1, 0));
+    }
+
+    #[test]
+    fn the_index_holds_latest_values_in_store_order() {
+        let mut older = project("web", "A=old\n");
+        older
+            .snapshots
+            .push(Snapshot::new("paste", None, "A=1\nA=2\n".into()));
+        let store = store_of(vec![older, project("api", "A=2\n")]);
+        let index = key_index(&store);
+        let holders: Vec<(&str, &str)> = index["A"]
+            .iter()
+            .map(|(p, v)| (p.name.as_str(), v.as_str()))
+            .collect();
+        assert_eq!(holders, [("web", "2"), ("api", "2")]);
+    }
 
     fn comment(text: &str) -> Line {
         Line::Comment { text: text.into() }
