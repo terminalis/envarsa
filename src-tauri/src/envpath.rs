@@ -18,6 +18,34 @@ pub enum NameClass {
     Other,
 }
 
+// Not yet called from commands.rs.
+#[allow(dead_code)]
+impl NameClass {
+    /// "writable" | "example" | "other" — for the UI badge.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NameClass::WritableLocal => "writable",
+            NameClass::ExampleFamily => "example",
+            NameClass::Other => "other",
+        }
+    }
+
+    /// Why a write to this class is refused; `None` when it's writable.
+    pub fn refusal(self) -> Option<&'static str> {
+        match self {
+            NameClass::WritableLocal => None,
+            NameClass::ExampleFamily => Some(
+                "refusing to write into an example file — .env.example/.sample/.template/.dist are \
+                 committed to git, so secrets would leak. Write to a .env.local instead.",
+            ),
+            NameClass::Other => Some(
+                "Envarsa only writes to the .env*.local family (.env.local, .env.development.local, …), \
+                 which is gitignored.",
+            ),
+        }
+    }
+}
+
 /// Classify by the final path segment alone, case-insensitively. Example
 /// markers win over everything, so `.env.example.local` is refused too.
 pub fn classify_name(path: &Path) -> NameClass {
@@ -92,6 +120,20 @@ mod tests {
         ] {
             assert_eq!(c(n), NameClass::Other, "{n}");
         }
+    }
+
+    #[test]
+    fn only_writable_local_is_allowed() {
+        assert_eq!(c(".env.local").as_str(), "writable");
+        assert_eq!(c(".env.example").as_str(), "example");
+        assert_eq!(c(".env").as_str(), "other");
+        assert_eq!(c(".env.local").refusal(), None);
+        assert!(c(".env.example")
+            .refusal()
+            .is_some_and(|r| r.contains("example file")));
+        assert!(c(".env")
+            .refusal()
+            .is_some_and(|r| r.contains(".env*.local")));
     }
 
     #[cfg(windows)]
