@@ -16,7 +16,9 @@ pub(crate) mod updates;
 use crate::envfile;
 use crate::state::AppState;
 use crate::store::{self, Project, Store};
-use tauri::State;
+use std::path::PathBuf;
+use tauri::{AppHandle, State, Wry};
+use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 
 pub(crate) type R<T> = Result<T, String>;
 
@@ -42,6 +44,24 @@ fn mutate<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Store) -> R<T>) ->
         *store = next;
         Ok(out)
     })
+}
+
+/// Run a native file dialog on a worker thread and resolve the picked
+/// path. `Ok(None)` means the user cancelled.
+async fn dialog_path(
+    app: &AppHandle,
+    open: impl FnOnce(FileDialogBuilder<Wry>) -> Option<FilePath> + Send + 'static,
+) -> R<Option<PathBuf>> {
+    let dialog = app.dialog().clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || open(dialog.file()))
+        .await
+        .map_err(|e| format!("dialog failed: {e}"))?;
+    picked
+        .map(|fp| {
+            fp.into_path()
+                .map_err(|e| format!("unsupported file location: {e}"))
+        })
+        .transpose()
 }
 
 fn latest_effective(project: &Project) -> Vec<(String, String)> {

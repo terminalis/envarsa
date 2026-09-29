@@ -1,4 +1,4 @@
-use super::{latest_effective, mutate, with_store, R};
+use super::{dialog_path, latest_effective, mutate, with_store, R};
 use crate::crypto;
 use crate::state::{self, AppState};
 use crate::store::{self, Opened, Store};
@@ -6,7 +6,6 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
-use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 // ------------------------------------------------------------ store file
@@ -32,21 +31,15 @@ pub async fn relocate_store(app: AppHandle, state: State<'_, AppState>) -> R<Opt
         );
     }
 
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Move the store file")
+    let Some(new_path) = dialog_path(&app, |d| {
+        d.set_title("Move the store file")
             .set_file_name("envarsa.store")
             .blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    let Some(fp) = picked else { return Ok(None) };
-    let new_path = fp
-        .into_path()
-        .map_err(|e| format!("unsupported file location: {e}"))?;
+    .await?
+    else {
+        return Ok(None);
+    };
     if new_path == old_path {
         return Ok(Some(new_path.to_string_lossy().to_string()));
     }
@@ -141,26 +134,15 @@ fn pending_import_path(state: &State<'_, AppState>, token: &str) -> R<PathBuf> {
 
 #[tauri::command]
 pub async fn pick_import_store(app: AppHandle, state: State<'_, AppState>) -> R<Option<String>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Import an Envarsa store")
+    dialog_path(&app, |d| {
+        d.set_title("Import an Envarsa store")
             .add_filter("Envarsa store", &["store", "bak"])
             .add_filter("All files", &["*"])
             .blocking_pick_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            stage_import(&state, path).map(Some)
-        }
-    }
+    .await?
+    .map(|path| stage_import(&state, path))
+    .transpose()
 }
 
 /// First look at a store file before importing: is it encrypted, what

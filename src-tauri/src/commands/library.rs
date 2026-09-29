@@ -1,4 +1,4 @@
-use super::{latest_effective, mutate, with_store, R};
+use super::{dialog_path, latest_effective, mutate, with_store, R};
 use crate::envfile::{self, Line};
 use crate::state::{AppState, Session};
 use crate::store::{self, Project, Snapshot, Store};
@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_dialog::DialogExt;
 
 // -------------------------------------------------------------- projects
 
@@ -292,25 +291,13 @@ fn read_env_file(path: &Path) -> R<PickedFile> {
 
 #[tauri::command]
 pub async fn pick_env_file(app: AppHandle) -> R<Option<PickedFile>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Choose a .env file to capture")
+    dialog_path(&app, |d| {
+        d.set_title("Choose a .env file to capture")
             .blocking_pick_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            read_env_file(&path).map(Some)
-        }
-    }
+    .await?
+    .map(|path| read_env_file(&path))
+    .transpose()
 }
 
 /// Drag/drop is handled as a window event so the path never round-trips

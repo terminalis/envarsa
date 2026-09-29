@@ -1,4 +1,4 @@
-use super::{selftest_active, with_store, R};
+use super::{dialog_path, selftest_active, with_store, R};
 use crate::crypto;
 use crate::envfile::{self, Line};
 use crate::state::AppState;
@@ -7,7 +7,6 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
-use tauri_plugin_dialog::DialogExt;
 
 // ---------------------------------------------------------------- export
 
@@ -25,28 +24,18 @@ pub async fn export_snapshot(
         Ok((snapshot.raw.clone(), format!("{}.env", project.name)))
     })?;
 
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Export snapshot as .env")
+    let Some(path) = dialog_path(&app, move |d| {
+        d.set_title("Export snapshot as .env")
             .set_file_name(&suggested)
             .blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            fs::write(&path, raw.as_bytes())
-                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-            Ok(Some(path.to_string_lossy().to_string()))
-        }
-    }
+    .await?
+    else {
+        return Ok(None);
+    };
+    fs::write(&path, raw.as_bytes())
+        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Test hook: export without a dialog. Only honored when the selftest
@@ -97,29 +86,18 @@ pub async fn export_store(
     let bytes = store_copy_bytes(&state, passphrase.as_deref())?;
     let suggested = format!("envarsa-{}.store", chrono::Local::now().format("%Y-%m-%d"));
 
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Export a copy of the store")
+    let Some(path) = dialog_path(&app, move |d| {
+        d.set_title("Export a copy of the store")
             .set_file_name(&suggested)
             .add_filter("Envarsa store", &["store"])
             .blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            fs::write(&path, &bytes)
-                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-            Ok(Some(path.to_string_lossy().to_string()))
-        }
-    }
+    .await?
+    else {
+        return Ok(None);
+    };
+    fs::write(&path, &bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Test hook: export the store copy without a dialog. Selftest-only.
@@ -321,26 +299,18 @@ pub async fn pick_write_target(
     state: State<'_, AppState>,
     suggested_dir: Option<String>,
 ) -> R<Option<WriteTarget>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        let mut b = dialog
-            .file()
-            .set_title("Write .env.local")
-            .set_file_name(".env.local");
-        if let Some(d) = suggested_dir.as_deref() {
-            b = b.set_directory(d);
+    let picked = dialog_path(&app, move |d| {
+        let mut d = d.set_title("Write .env.local").set_file_name(".env.local");
+        if let Some(dir) = suggested_dir.as_deref() {
+            d = d.set_directory(dir);
         }
-        b.blocking_save_file()
+        d.blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
+    .await?;
 
     match picked {
         None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
+        Some(path) => {
             let dir = path
                 .parent()
                 .map(|d| d.to_string_lossy().to_string())
@@ -456,20 +426,14 @@ pub async fn pick_example_file(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> R<Option<ExampleStaged>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Choose a .env.example to use as a template")
+    let Some(path) = dialog_path(&app, |d| {
+        d.set_title("Choose a .env.example to use as a template")
             .blocking_pick_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    let Some(fp) = picked else { return Ok(None) };
-    let path = fp
-        .into_path()
-        .map_err(|e| format!("unsupported file location: {e}"))?;
+    .await?
+    else {
+        return Ok(None);
+    };
     let bytes = fs::read(&path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
     if bytes.len() > 2_000_000 {
         return Err("that file is larger than 2 MB — not an .env example?".into());
