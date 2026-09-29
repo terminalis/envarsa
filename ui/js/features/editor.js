@@ -5,7 +5,7 @@ import { esc, plural } from '../util.js';
 import { ICONS, modalShell, folderField, projectNames } from '../kit.js';
 import {
   S, run, busy, toast, openModal, renderModal, focusNext, loadProjects, selectProject,
-} from '../main.js';
+} from '../app.js';
 
 const newEntry = () => ({ kind: 'entry', key: '', value: '', exported: false });
 

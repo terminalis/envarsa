@@ -5,9 +5,9 @@ import { api } from '../api.js';
 import { esc, timeAgo, fullTime, plural, errText } from '../util.js';
 import { ICONS, brandMark, modalShell, folderField } from '../kit.js';
 import {
-  S, $, run, busy, toast, render, renderPopover, openModal, formError,
+  S, $, run, busy, toast, render, renderPopover, openModal, formError, clearRevealed,
   loadView, selectProject, refreshAfterMutation,
-} from '../main.js';
+} from '../app.js';
 
 const REVEAL_MS = 30_000;
 const MASK = '<span class="mask" aria-label="hidden value">••••••••••</span>';
@@ -268,11 +268,6 @@ function reveal(idx, value) {
     S.revealed.set(idx, { value, timer: setTimeout(() => reveal(idx, null), REVEAL_MS) });
   }
   renderRowsAndTools();
-}
-
-export function clearRevealed() {
-  for (const r of S.revealed.values()) clearTimeout(r.timer);
-  S.revealed.clear();
 }
 
 export function hideRevealed() {

@@ -5,7 +5,7 @@
 import { api } from '../api.js';
 import { esc, errText } from '../util.js';
 import { modalShell } from '../kit.js';
-import { S, $, run, busy, toast, openModal, closeModal, renderModal } from '../main.js';
+import { S, $, run, busy, toast, openModal, closeModal, renderModal } from '../app.js';
 
 let previewSeq = 0;
 
