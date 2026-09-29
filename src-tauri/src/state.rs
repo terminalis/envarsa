@@ -134,8 +134,43 @@ pub struct Inner {
     pub session: Session,
     /// At most one import is in flight; a new pick replaces it.
     pub pending_import: Option<PendingImport>,
-    /// At most one `.env.local` write is staged; a new pick replaces it.
-    pub pending_write: Option<PendingWrite>,
+    /// The write modal's two tabs each keep one staged `.env.local`
+    /// write: a plain target, and an example scaffold (`template` set).
+    /// A new pick replaces only its own kind, so choosing an example
+    /// never un-stages the target picked on the other tab.
+    pub pending_target: Option<PendingWrite>,
+    pub pending_example: Option<PendingWrite>,
+}
+
+impl Inner {
+    /// Stage a write and return its token.
+    pub fn stage_write(&mut self, path: PathBuf, template: Option<String>) -> String {
+        let token = store::new_id();
+        let slot = if template.is_some() {
+            &mut self.pending_example
+        } else {
+            &mut self.pending_target
+        };
+        *slot = Some(PendingWrite {
+            token: token.clone(),
+            path,
+            template,
+        });
+        token
+    }
+
+    pub fn pending_write(&self, token: &str) -> Option<&PendingWrite> {
+        [&self.pending_target, &self.pending_example]
+            .into_iter()
+            .flatten()
+            .find(|p| p.token == token)
+    }
+
+    /// A finished write closes the modal, so nothing it staged stays valid.
+    pub fn clear_pending_writes(&mut self) {
+        self.pending_target = None;
+        self.pending_example = None;
+    }
 }
 
 #[derive(Default)]
@@ -406,5 +441,54 @@ mod tests {
         fs::write(dir.join(PORTABLE_MARKER), b"").unwrap();
         assert!(has_portable_marker(&dir), "marker beside exe → portable");
         fs::remove_dir_all(dir).ok();
+    }
+
+    fn inner() -> Inner {
+        Inner {
+            store_path: PathBuf::from("envarsa.store"),
+            config_path: PathBuf::from("config.json"),
+            config: Config::default(),
+            env_override: false,
+            session: Session::Locked,
+            pending_import: None,
+            pending_target: None,
+            pending_example: None,
+        }
+    }
+
+    /// The write modal's two tabs stage independently: picking on one
+    /// tab must not invalidate the token the other tab holds.
+    #[test]
+    fn target_and_example_writes_stay_staged_side_by_side() {
+        let mut i = inner();
+        let target = i.stage_write(PathBuf::from("/app/.env.local"), None);
+        let example = i.stage_write(PathBuf::from("/tpl/.env.local"), Some("A=\n".into()));
+        assert_eq!(
+            i.pending_write(&target).map(|p| p.path.clone()),
+            Some(PathBuf::from("/app/.env.local")),
+            "picking an example keeps the staged target"
+        );
+        let template = i
+            .pending_write(&example)
+            .and_then(|p| p.template.as_deref());
+        assert_eq!(template, Some("A=\n"));
+
+        // The other order: re-staging the target keeps the example, and
+        // replaces only the previous target.
+        let target2 = i.stage_write(PathBuf::from("/other/.env.local"), None);
+        assert!(i.pending_write(&example).is_some(), "example kept");
+        assert!(i.pending_write(&target).is_none(), "old target replaced");
+        assert!(i.pending_write(&target2).is_some());
+        assert!(i.pending_write("not-a-token").is_none());
+    }
+
+    #[test]
+    fn a_finished_write_clears_every_staged_write() {
+        let mut i = inner();
+        let target = i.stage_write(PathBuf::from("/app/.env.local"), None);
+        let example = i.stage_write(PathBuf::from("/tpl/.env.local"), Some(String::new()));
+        i.clear_pending_writes();
+        assert!(i.pending_write(&target).is_none());
+        assert!(i.pending_write(&example).is_none());
     }
 }
