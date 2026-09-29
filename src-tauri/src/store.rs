@@ -75,7 +75,6 @@ impl Store {
     }
 
     /// A project and one of its snapshots; `None` means the latest.
-    #[allow(dead_code)] // Not yet called from commands.rs.
     pub fn find(
         &self,
         project_id: &str,
@@ -95,7 +94,6 @@ impl Store {
         Ok((project, snapshot))
     }
 
-    #[allow(dead_code)] // Not yet called from commands.rs.
     pub fn find_mut(&mut self, project_id: &str) -> Result<&mut Project, String> {
         self.project_mut(project_id)
             .ok_or_else(|| "project not found".to_string())
@@ -160,7 +158,6 @@ pub fn parse_store(bytes: &[u8]) -> Result<Store, String> {
 /// A store file's bytes, opened as far as the passphrase allows.
 pub enum Opened {
     Plain(Store),
-    #[allow(dead_code)] // Not yet read by commands.rs.
     Encrypted(Store),
     /// Encrypted, and no passphrase was given.
     NeedsPassphrase,

@@ -18,8 +18,6 @@ pub enum NameClass {
     Other,
 }
 
-// Not yet called from commands.rs.
-#[allow(dead_code)]
 impl NameClass {
     /// "writable" | "example" | "other" — for the UI badge.
     pub fn as_str(self) -> &'static str {

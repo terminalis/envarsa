@@ -1,13 +1,14 @@
-use super::{selftest_active, with_inner, with_store, R};
+use super::session::check_passphrase;
+use super::{dialog_path, read_text_capped, selftest_active, with_store, R};
 use crate::crypto;
-use crate::envfile::{self, Line};
+use crate::envfile::{self, merge_with_report, AbsentPolicy, MergeReport};
+use crate::envpath::classify_name;
 use crate::state::AppState;
-use crate::store::{self, Store};
+use crate::store;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
-use tauri_plugin_dialog::DialogExt;
 
 // ---------------------------------------------------------------- export
 
@@ -21,37 +22,22 @@ pub async fn export_snapshot(
     snapshot_id: String,
 ) -> R<Option<String>> {
     let (raw, suggested) = with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (project, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         Ok((snapshot.raw.clone(), format!("{}.env", project.name)))
     })?;
 
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Export snapshot as .env")
+    let Some(path) = dialog_path(&app, move |d| {
+        d.set_title("Export snapshot as .env")
             .set_file_name(&suggested)
             .blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            fs::write(&path, raw.as_bytes())
-                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-            Ok(Some(path.to_string_lossy().to_string()))
-        }
-    }
+    .await?
+    else {
+        return Ok(None);
+    };
+    fs::write(&path, raw.as_bytes())
+        .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Test hook: export without a dialog. Only honored when the selftest
@@ -68,12 +54,7 @@ pub fn export_to_path(
         return Err("export_to_path is a selftest-only command".into());
     }
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (_, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         fs::write(&path, snapshot.raw.as_bytes()).map_err(|e| e.to_string())
     })
 }
@@ -84,9 +65,7 @@ pub fn export_to_path(
 /// transport passphrase (independent of the at-rest one).
 fn store_copy_bytes(state: &State<'_, AppState>, passphrase: Option<&str>) -> R<Vec<u8>> {
     if let Some(p) = passphrase {
-        if p.chars().count() < 8 {
-            return Err("use at least 8 characters".into());
-        }
+        check_passphrase(p)?;
     }
     let bytes = with_store(state, |store| Ok(store::serialize_store(store)))?;
     match passphrase {
@@ -107,29 +86,18 @@ pub async fn export_store(
     let bytes = store_copy_bytes(&state, passphrase.as_deref())?;
     let suggested = format!("envarsa-{}.store", chrono::Local::now().format("%Y-%m-%d"));
 
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Export a copy of the store")
+    let Some(path) = dialog_path(&app, move |d| {
+        d.set_title("Export a copy of the store")
             .set_file_name(&suggested)
             .add_filter("Envarsa store", &["store"])
             .blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            fs::write(&path, &bytes)
-                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
-            Ok(Some(path.to_string_lossy().to_string()))
-        }
-    }
+    .await?
+    else {
+        return Ok(None);
+    };
+    fs::write(&path, &bytes).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Test hook: export the store copy without a dialog. Selftest-only.
@@ -154,32 +122,12 @@ pub fn export_store_to_path(
 // destination is staged behind an opaque token, so the webview never
 // supplies a path. The store is never touched — this is an export.
 
-/// "writable" | "example" | "other" — for the UI badge.
-fn class_str(path: &Path) -> &'static str {
-    use crate::envpath::NameClass;
-    match crate::envpath::classify_name(path) {
-        NameClass::WritableLocal => "writable",
-        NameClass::ExampleFamily => "example",
-        NameClass::Other => "other",
-    }
-}
-
 /// The last check before any bytes are written. Run on the final resolved
 /// path, regardless of how it was chosen.
 fn guard_writable_local(path: &Path) -> R<()> {
-    use crate::envpath::NameClass;
-    match crate::envpath::classify_name(path) {
-        NameClass::WritableLocal => Ok(()),
-        NameClass::ExampleFamily => Err(
-            "refusing to write into an example file — .env.example/.sample/.template/.dist are \
-             committed to git, so secrets would leak. Write to a .env.local instead."
-                .into(),
-        ),
-        NameClass::Other => Err(
-            "Envarsa only writes to the .env*.local family (.env.local, .env.development.local, …), \
-             which is gitignored."
-                .into(),
-        ),
+    match classify_name(path).refusal() {
+        Some(why) => Err(why.into()),
+        None => Ok(()),
     }
 }
 
@@ -188,86 +136,121 @@ pub(crate) fn stage_write(
     path: PathBuf,
     template: Option<String>,
 ) -> R<String> {
-    with_inner(state, |inner| Ok(inner.stage_write(path, template)))
-}
-
-fn pending_write(state: &State<'_, AppState>, token: &str) -> R<(PathBuf, Option<String>)> {
-    with_inner(state, |inner| {
-        inner
-            .pending_write(token)
-            .map(|p| (p.path.clone(), p.template.clone()))
-            .ok_or_else(|| "that write is no longer staged — choose the location again".into())
-    })
+    state.with(|inner| Ok(inner.stage_write(path, template)))
 }
 
 fn clear_pending_write(state: &State<'_, AppState>) {
-    let _ = with_inner(state, |inner| {
+    let _ = state.with(|inner| {
         inner.clear_pending_writes();
         Ok(())
     });
 }
 
-fn snapshot_raw(store: &Store, project_id: &str, snapshot_id: &str) -> R<String> {
-    let project = store
-        .project(project_id)
-        .ok_or_else(|| "project not found".to_string())?;
-    let snapshot = project
-        .snapshot(snapshot_id)
-        .ok_or_else(|| "snapshot not found".to_string())?;
-    Ok(snapshot.raw.clone())
+/// How a staged write fills its target.
+enum Fill {
+    /// The write dialog's target tab: the snapshot's own lines, merged
+    /// into an existing target when `mode` is "merge".
+    Snapshot { mode: String },
+    /// The example tab: the snapshot's values poured into an example's
+    /// comments and keys; keys the snapshot lacks are blanked.
+    Example { template: String },
 }
 
-/// Read a `.env.local` to merge into. Missing → empty (nothing to keep).
-fn read_target_text(path: &Path) -> R<String> {
-    match fs::read(path) {
-        Ok(bytes) => {
-            if bytes.len() > 2_000_000 {
-                return Err("that file is larger than 2 MB — refusing to merge".into());
-            }
-            Ok(String::from_utf8_lossy(&bytes).to_string())
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(e) => Err(format!("could not read {}: {e}", path.display())),
-    }
+/// Look up a staged write by token. `mode` is the target tab's write
+/// mode; `None` means the example tab, whose staging carries a template.
+fn staged(state: &State<'_, AppState>, token: &str, mode: Option<String>) -> R<(PathBuf, Fill)> {
+    let (path, template) = state.with(|inner| {
+        inner
+            .pending_write(token)
+            .map(|p| (p.path.clone(), p.template.clone()))
+            .ok_or_else(|| "that write is no longer staged — choose the location again".into())
+    })?;
+    let fill = match mode {
+        Some(mode) => Fill::Snapshot { mode },
+        None => Fill::Example {
+            template: template
+                .ok_or_else(|| "that staged write has no example template".to_string())?,
+        },
+    };
+    Ok((path, fill))
 }
 
-/// Partition keys for the preview: which source keys are appended, which
-/// target keys are substituted, and which are blanked (scaffold) or kept
-/// (merge). Names only — values never cross here.
-fn diff_keys(
-    target_lines: &[Line],
-    source: &[(String, String)],
-    empty_out: bool,
-) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
-    use std::collections::HashSet;
-    let source_keys: HashSet<&str> = source.iter().map(|(k, _)| k.as_str()).collect();
-    let mut target_keys: Vec<&str> = Vec::new();
-    let mut seen: HashSet<&str> = HashSet::new();
-    for l in target_lines {
-        if let Line::Entry { key, .. } = l {
-            if seen.insert(key.as_str()) {
-                target_keys.push(key.as_str());
-            }
+/// The text a write puts at `path`, and its preview. Preview and write
+/// both come from here, so what the user approves is what gets written.
+fn plan_write(path: &Path, fill: &Fill, raw: &str) -> R<(String, WritePreview)> {
+    let snap_lines = envfile::parse(raw);
+    let source = envfile::effective_entries(&snap_lines);
+    let (text, report, mode) = match fill {
+        Fill::Example { template } => {
+            let target = envfile::parse(template);
+            let (text, report) = merge_with_report(&target, &source, AbsentPolicy::EmptyOut);
+            (text, report, "example")
         }
-    }
-    let mut substituted = Vec::new();
-    let mut emptied = Vec::new();
-    let mut kept = Vec::new();
-    for k in &target_keys {
-        if source_keys.contains(k) {
-            substituted.push((*k).to_string());
-        } else if empty_out {
-            emptied.push((*k).to_string());
-        } else {
-            kept.push((*k).to_string());
+        Fill::Snapshot { mode } if mode == "merge" && path.exists() => {
+            let target = envfile::parse(&read_text_capped(path)?);
+            let (text, report) = merge_with_report(&target, &source, AbsentPolicy::KeepTarget);
+            (text, report, "merge")
         }
-    }
-    let added: Vec<String> = source
-        .iter()
-        .filter(|(k, _)| !seen.contains(k.as_str()))
-        .map(|(k, _)| k.clone())
-        .collect();
-    (added, substituted, emptied, kept)
+        Fill::Snapshot { .. } => {
+            // fresh / overwrite: the snapshot's own re-serialized lines.
+            let report = MergeReport {
+                added: source.iter().map(|(k, _)| k.clone()).collect(),
+                ..MergeReport::default()
+            };
+            let mode = if path.exists() { "overwrite" } else { "fresh" };
+            (envfile::serialize_lines(&snap_lines), report, mode)
+        }
+    };
+    let preview = WritePreview {
+        result_entry_count: envfile::entry_count(&text),
+        added: report.added,
+        substituted: report.substituted,
+        emptied: report.emptied,
+        kept: report.kept,
+        blocked: None,
+        mode: mode.to_string(),
+    };
+    Ok((text, preview))
+}
+
+fn snapshot_raw(state: &State<'_, AppState>, project_id: &str, snapshot_id: &str) -> R<String> {
+    with_store(state, |store| {
+        Ok(store.find(project_id, Some(snapshot_id))?.1.raw.clone())
+    })
+}
+
+/// Preview a staged write. A guard refusal comes back as `blocked`, so
+/// the UI can show it without throwing.
+fn preview(
+    state: &State<'_, AppState>,
+    project_id: &str,
+    snapshot_id: &str,
+    token: &str,
+    mode: Option<String>,
+) -> R<WritePreview> {
+    let (path, fill) = staged(state, token, mode)?;
+    let blocked = classify_name(&path).refusal().map(String::from);
+    let raw = snapshot_raw(state, project_id, snapshot_id)?;
+    let (_, preview) = plan_write(&path, &fill, &raw)?;
+    Ok(WritePreview { blocked, ..preview })
+}
+
+/// Carry out a staged write. A finished write closes the dialog, so it
+/// clears every staged write.
+fn write(
+    state: &State<'_, AppState>,
+    project_id: &str,
+    snapshot_id: &str,
+    token: &str,
+    mode: Option<String>,
+) -> R<String> {
+    let (path, fill) = staged(state, token, mode)?;
+    guard_writable_local(&path)?;
+    let raw = snapshot_raw(state, project_id, snapshot_id)?;
+    let (text, _) = plan_write(&path, &fill, &raw)?;
+    store::write_atomic(&path, text.as_bytes())?;
+    clear_pending_write(state);
+    Ok(path.to_string_lossy().to_string())
 }
 
 #[derive(Serialize)]
@@ -281,6 +264,20 @@ pub struct WriteTarget {
     pub dir: String,
     pub class: String,
     pub exists: bool,
+}
+
+/// Stage `path` as the target tab's write and describe it.
+fn stage_target(state: &State<'_, AppState>, path: PathBuf) -> R<WriteTarget> {
+    Ok(WriteTarget {
+        class: classify_name(&path).as_str().to_string(),
+        exists: path.exists(),
+        dir: path
+            .parent()
+            .map(|d| d.to_string_lossy().to_string())
+            .unwrap_or_default(),
+        path: path.to_string_lossy().to_string(),
+        token: stage_write(state, path, None)?,
+    })
 }
 
 #[derive(Serialize)]
@@ -306,12 +303,7 @@ pub fn stage_write_target(
     snapshot_id: String,
 ) -> R<WriteTarget> {
     let dir = with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (project, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         let from_source = snapshot
             .source_path
             .as_deref()
@@ -323,15 +315,7 @@ pub fn stage_write_target(
                 .to_string()
         })
     })?;
-    let path = dir.join(".env.local");
-    let target = WriteTarget {
-        token: stage_write(&state, path.clone(), None)?,
-        class: class_str(&path).to_string(),
-        exists: path.exists(),
-        dir: dir.to_string_lossy().to_string(),
-        path: path.to_string_lossy().to_string(),
-    };
-    Ok(target)
+    stage_target(&state, dir.join(".env.local"))
 }
 
 /// Redirect the target via a save dialog. `suggested_dir` only seeds the
@@ -342,79 +326,16 @@ pub async fn pick_write_target(
     state: State<'_, AppState>,
     suggested_dir: Option<String>,
 ) -> R<Option<WriteTarget>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        let mut b = dialog
-            .file()
-            .set_title("Write .env.local")
-            .set_file_name(".env.local");
-        if let Some(d) = suggested_dir.as_deref() {
-            b = b.set_directory(d);
+    dialog_path(&app, move |d| {
+        let mut d = d.set_title("Write .env.local").set_file_name(".env.local");
+        if let Some(dir) = suggested_dir.as_deref() {
+            d = d.set_directory(dir);
         }
-        b.blocking_save_file()
+        d.blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            let dir = path
-                .parent()
-                .map(|d| d.to_string_lossy().to_string())
-                .unwrap_or_default();
-            Ok(Some(WriteTarget {
-                token: stage_write(&state, path.clone(), None)?,
-                class: class_str(&path).to_string(),
-                exists: path.exists(),
-                dir,
-                path: path.to_string_lossy().to_string(),
-            }))
-        }
-    }
-}
-
-fn build_write_text(path: &Path, mode: &str, raw: &str) -> R<(String, WritePreview)> {
-    let snap_lines = envfile::parse(raw);
-    let source = envfile::effective_entries(&snap_lines);
-    if mode == "merge" && path.exists() {
-        let target_lines = envfile::parse(&read_target_text(path)?);
-        let (added, substituted, emptied, kept) = diff_keys(&target_lines, &source, false);
-        let text = envfile::merge(&target_lines, &source, envfile::AbsentPolicy::KeepTarget);
-        let count = envfile::entry_count(&text);
-        Ok((
-            text,
-            WritePreview {
-                result_entry_count: count,
-                added,
-                substituted,
-                emptied,
-                kept,
-                blocked: None,
-                mode: mode.to_string(),
-            },
-        ))
-    } else {
-        // fresh / overwrite: the snapshot's own re-serialized lines.
-        let text = envfile::serialize_lines(&snap_lines);
-        let keys: Vec<String> = source.iter().map(|(k, _)| k.clone()).collect();
-        let count = envfile::entry_count(&text);
-        Ok((
-            text,
-            WritePreview {
-                result_entry_count: count,
-                added: keys,
-                substituted: Vec::new(),
-                emptied: Vec::new(),
-                kept: Vec::new(),
-                blocked: None,
-                mode: if path.exists() { "overwrite" } else { "fresh" }.to_string(),
-            },
-        ))
-    }
+    .await?
+    .map(|path| stage_target(&state, path))
+    .transpose()
 }
 
 #[tauri::command]
@@ -425,14 +346,7 @@ pub fn preview_write(
     token: String,
     mode: String,
 ) -> R<WritePreview> {
-    let (path, _) = pending_write(&state, &token)?;
-    let blocked = guard_writable_local(&path).err();
-    with_store(&state, |store| {
-        let raw = snapshot_raw(store, &project_id, &snapshot_id)?;
-        let (_, mut preview) = build_write_text(&path, &mode, &raw)?;
-        preview.blocked = blocked.clone();
-        Ok(preview)
-    })
+    preview(&state, &project_id, &snapshot_id, &token, Some(mode))
 }
 
 #[tauri::command]
@@ -443,15 +357,7 @@ pub fn write_env_local(
     token: String,
     mode: String,
 ) -> R<String> {
-    let (path, _) = pending_write(&state, &token)?;
-    guard_writable_local(&path)?;
-    let text = with_store(&state, |store| {
-        let raw = snapshot_raw(store, &project_id, &snapshot_id)?;
-        Ok(build_write_text(&path, &mode, &raw)?.0)
-    })?;
-    store::write_atomic(&path, text.as_bytes())?;
-    clear_pending_write(&state);
-    Ok(path.to_string_lossy().to_string())
+    write(&state, &project_id, &snapshot_id, &token, Some(mode))
 }
 
 // --- import a .env.example as a scaffold, write .env.local beside it ---
@@ -464,9 +370,7 @@ pub struct ExampleStaged {
     /// Display only — the staged output path (`<example dir>/.env.local`).
     pub out_path: String,
     pub out_class: String,
-    pub out_exists: bool,
     pub example_keys: Vec<String>,
-    pub example_comments: usize,
 }
 
 /// Pick a `.env.example` to use as a template. Only its text is read; the
@@ -477,25 +381,15 @@ pub async fn pick_example_file(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> R<Option<ExampleStaged>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Choose a .env.example to use as a template")
+    let Some(path) = dialog_path(&app, |d| {
+        d.set_title("Choose a .env.example to use as a template")
             .blocking_pick_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    let Some(fp) = picked else { return Ok(None) };
-    let path = fp
-        .into_path()
-        .map_err(|e| format!("unsupported file location: {e}"))?;
-    let bytes = fs::read(&path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
-    if bytes.len() > 2_000_000 {
-        return Err("that file is larger than 2 MB — not an .env example?".into());
-    }
-    let template = String::from_utf8_lossy(&bytes).to_string();
+    .await?
+    else {
+        return Ok(None);
+    };
+    let template = read_text_capped(&path)?;
     let example_name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -504,23 +398,16 @@ pub async fn pick_example_file(
         .parent()
         .map(|d| d.join(".env.local"))
         .ok_or_else(|| "that file has no parent directory".to_string())?;
-    let lines = envfile::parse(&template);
-    let example_keys: Vec<String> = envfile::effective_entries(&lines)
+    let example_keys: Vec<String> = envfile::effective_entries(&envfile::parse(&template))
         .into_iter()
         .map(|(k, _)| k)
         .collect();
-    let example_comments = lines
-        .iter()
-        .filter(|l| matches!(l, Line::Comment(_)))
-        .count();
     Ok(Some(ExampleStaged {
-        token: stage_write(&state, out_path.clone(), Some(template))?,
-        out_class: class_str(&out_path).to_string(),
-        out_exists: out_path.exists(),
+        out_class: classify_name(&out_path).as_str().to_string(),
         out_path: out_path.to_string_lossy().to_string(),
+        token: stage_write(&state, out_path, Some(template))?,
         example_name,
         example_keys,
-        example_comments,
     }))
 }
 
@@ -531,26 +418,7 @@ pub fn preview_example_write(
     snapshot_id: String,
     token: String,
 ) -> R<WritePreview> {
-    let (path, template) = pending_write(&state, &token)?;
-    let template =
-        template.ok_or_else(|| "that staged write has no example template".to_string())?;
-    let blocked = guard_writable_local(&path).err();
-    with_store(&state, |store| {
-        let raw = snapshot_raw(store, &project_id, &snapshot_id)?;
-        let source = envfile::effective_entries(&envfile::parse(&raw));
-        let target_lines = envfile::parse(&template);
-        let (added, substituted, emptied, kept) = diff_keys(&target_lines, &source, true);
-        let text = envfile::merge(&target_lines, &source, envfile::AbsentPolicy::EmptyOut);
-        Ok(WritePreview {
-            result_entry_count: envfile::entry_count(&text),
-            added,
-            substituted,
-            emptied,
-            kept,
-            blocked: blocked.clone(),
-            mode: "example".to_string(),
-        })
-    })
+    preview(&state, &project_id, &snapshot_id, &token, None)
 }
 
 #[tauri::command]
@@ -560,20 +428,80 @@ pub fn write_example_scaffold(
     snapshot_id: String,
     token: String,
 ) -> R<String> {
-    let (path, template) = pending_write(&state, &token)?;
-    let template =
-        template.ok_or_else(|| "that staged write has no example template".to_string())?;
-    guard_writable_local(&path)?;
-    let text = with_store(&state, |store| {
-        let raw = snapshot_raw(store, &project_id, &snapshot_id)?;
-        let source = envfile::effective_entries(&envfile::parse(&raw));
-        Ok(envfile::merge(
-            &envfile::parse(&template),
-            &source,
-            envfile::AbsentPolicy::EmptyOut,
-        ))
-    })?;
-    store::write_atomic(&path, text.as_bytes())?;
-    clear_pending_write(&state);
-    Ok(path.to_string_lossy().to_string())
+    write(&state, &project_id, &snapshot_id, &token, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::fixtures::tmp_dir;
+
+    const RAW: &str = "# snap\nPORT=3000\nAPI_KEY=secret\n";
+
+    fn snapshot_fill(mode: &str) -> Fill {
+        Fill::Snapshot { mode: mode.into() }
+    }
+
+    #[test]
+    fn a_missing_target_is_written_fresh_even_in_merge_mode() {
+        let dir = tmp_dir("plan-fresh");
+        let path = dir.join(".env.local");
+        let (text, p) = plan_write(&path, &snapshot_fill("merge"), RAW).unwrap();
+        assert_eq!(text, RAW);
+        assert_eq!(p.mode, "fresh");
+        assert_eq!(p.added, ["PORT", "API_KEY"]);
+        assert_eq!(p.result_entry_count, 2);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn merge_keeps_target_only_keys_and_overwrite_replaces_them() {
+        let dir = tmp_dir("plan-merge");
+        let path = dir.join(".env.local");
+        fs::write(&path, "# local\nLOCAL_ONLY=keep\nPORT=old\n").unwrap();
+
+        let (text, p) = plan_write(&path, &snapshot_fill("merge"), RAW).unwrap();
+        assert_eq!(
+            text,
+            "# local\nLOCAL_ONLY=keep\nPORT=3000\n\n# Added by Envarsa\nAPI_KEY=secret\n"
+        );
+        assert_eq!(p.mode, "merge");
+        assert_eq!(p.added, ["API_KEY"]);
+        assert_eq!(p.substituted, ["PORT"]);
+        assert_eq!(p.kept, ["LOCAL_ONLY"]);
+        assert_eq!(p.result_entry_count, 3);
+
+        let (text, p) = plan_write(&path, &snapshot_fill("overwrite"), RAW).unwrap();
+        assert_eq!(text, RAW);
+        assert_eq!(p.mode, "overwrite");
+        assert!(p.kept.is_empty() && p.substituted.is_empty());
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn an_example_is_filled_and_its_unmatched_keys_blanked() {
+        let fill = Fill::Example {
+            template: "# API\nAPI_KEY=put-your-key-here\nUNUSED=placeholder\n".into(),
+        };
+        // The example fill ignores whatever is at the target path.
+        let (text, p) = plan_write(Path::new("/nowhere/.env.local"), &fill, RAW).unwrap();
+        assert_eq!(
+            text,
+            "# API\nAPI_KEY=secret\nUNUSED=\n\n# Added by Envarsa\nPORT=3000\n"
+        );
+        assert_eq!(p.mode, "example");
+        assert_eq!(p.substituted, ["API_KEY"]);
+        assert_eq!(p.emptied, ["UNUSED"]);
+        assert_eq!(p.added, ["PORT"]);
+        assert!(p.blocked.is_none());
+    }
+
+    #[test]
+    fn only_the_local_family_is_writable() {
+        assert!(guard_writable_local(Path::new("/p/.env.local")).is_ok());
+        assert!(guard_writable_local(Path::new("/p/.env.development.local")).is_ok());
+        let example = guard_writable_local(Path::new("/p/.env.example")).unwrap_err();
+        assert!(example.contains("example file"), "{example}");
+        assert!(guard_writable_local(Path::new("/p/notes.txt")).is_err());
+    }
 }

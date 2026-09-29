@@ -9,12 +9,7 @@ use tauri::State;
 // -------------------------------------------------------- reveal & copy
 
 fn line_at(store: &Store, project_id: &str, snapshot_id: &str, idx: usize) -> R<Line> {
-    let project = store
-        .project(project_id)
-        .ok_or_else(|| "project not found".to_string())?;
-    let snapshot = project
-        .snapshot(snapshot_id)
-        .ok_or_else(|| "snapshot not found".to_string())?;
+    let (_, snapshot) = store.find(project_id, Some(snapshot_id))?;
     envfile::parse(&snapshot.raw)
         .into_iter()
         .nth(idx)
@@ -41,7 +36,7 @@ pub fn reveal_value(
     with_store(&state, |store| {
         match line_at(store, &project_id, &snapshot_id, idx)? {
             Line::Entry { key, value, .. } => Ok(RevealedValue { key, value }),
-            Line::Bad(raw) => Ok(RevealedValue {
+            Line::Bad { raw } => Ok(RevealedValue {
                 key: String::new(),
                 value: raw,
             }),
@@ -74,12 +69,7 @@ pub fn copy_value(
 #[tauri::command]
 pub fn copy_block(state: State<'_, AppState>, project_id: String, snapshot_id: String) -> R<usize> {
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (_, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         copy_secret_to_clipboard(snapshot.raw.clone())?;
         Ok(envfile::entry_count(&snapshot.raw))
     })

@@ -1,19 +1,18 @@
-use super::{latest_effective, mutate, with_inner, with_store, R};
+use super::{dialog_path, latest_effective, mutate, with_store, R};
 use crate::crypto;
 use crate::state::{self, AppState};
-use crate::store::{self, Store};
+use crate::store::{self, Opened, Store};
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
-use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 // ------------------------------------------------------------ store file
 
 #[tauri::command]
 pub fn reveal_store(app: AppHandle, state: State<'_, AppState>) -> R<()> {
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         app.opener()
             .reveal_item_in_dir(&inner.store_path)
             .map_err(|e| format!("could not open the file location: {e}"))
@@ -24,35 +23,28 @@ pub fn reveal_store(app: AppHandle, state: State<'_, AppState>) -> R<()> {
 /// sync themselves). Manual, user-owned portability.
 #[tauri::command]
 pub async fn relocate_store(app: AppHandle, state: State<'_, AppState>) -> R<Option<String>> {
-    let (old_path, env_override) = with_inner(&state, |inner| {
-        Ok((inner.store_path.clone(), inner.env_override))
-    })?;
+    let (old_path, env_override) =
+        state.with(|inner| Ok((inner.store_path.clone(), inner.env_override)))?;
     if env_override {
         return Err(
             "the store location is currently forced by ENVARSA_STORE_PATH — unset it first".into(),
         );
     }
 
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Move the store file")
+    let Some(new_path) = dialog_path(&app, |d| {
+        d.set_title("Move the store file")
             .set_file_name("envarsa.store")
             .blocking_save_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    let Some(fp) = picked else { return Ok(None) };
-    let new_path = fp
-        .into_path()
-        .map_err(|e| format!("unsupported file location: {e}"))?;
+    .await?
+    else {
+        return Ok(None);
+    };
     if new_path == old_path {
         return Ok(Some(new_path.to_string_lossy().to_string()));
     }
 
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         if let Some(dir) = new_path.parent() {
             fs::create_dir_all(dir).map_err(|e| format!("could not create folder: {e}"))?;
         }
@@ -104,23 +96,17 @@ pub struct ImportPreview {
 /// no passphrase was supplied.
 fn read_import_file(path: &Path, passphrase: Option<&str>) -> R<(bool, Option<Store>)> {
     let bytes = fs::read(path).map_err(|e| format!("could not read that file: {e}"))?;
-    if crypto::is_encrypted(&bytes) {
-        match passphrase {
-            None => Ok((true, None)),
-            Some(p) => {
-                let plain = crypto::decrypt(&bytes, p)?;
-                Ok((true, Some(store::parse_store(&plain)?)))
-            }
-        }
-    } else {
-        let s = store::parse_store(&bytes)
-            .map_err(|e| format!("that file is not an Envarsa store: {e}"))?;
-        Ok((false, Some(s)))
+    match store::open(&bytes, passphrase) {
+        Ok(Opened::Plain(s)) => Ok((false, Some(s))),
+        Ok(Opened::Encrypted(s)) => Ok((true, Some(s))),
+        Ok(Opened::NeedsPassphrase) => Ok((true, None)),
+        Err(e) if crypto::is_encrypted(&bytes) => Err(e),
+        Err(e) => Err(format!("that file is not an Envarsa store: {e}")),
     }
 }
 
 fn guard_not_live_store(state: &State<'_, AppState>, path: &Path) -> R<()> {
-    let live = with_inner(state, |inner| Ok(inner.store_path.clone()))?;
+    let live = state.with(|inner| Ok(inner.store_path.clone()))?;
     let same = match (fs::canonicalize(path), fs::canonicalize(&live)) {
         (Ok(a), Ok(b)) => a == b,
         _ => path == live,
@@ -134,46 +120,29 @@ fn guard_not_live_store(state: &State<'_, AppState>, path: &Path) -> R<()> {
 /// Remember a picked import file and hand back the token for it. The
 /// path stays on the Rust side; the webview only ever sees the token.
 pub(crate) fn stage_import(state: &State<'_, AppState>, path: PathBuf) -> R<String> {
-    let token = store::new_id();
-    with_inner(state, |inner| {
-        inner.pending_import = Some(state::PendingImport {
-            token: token.clone(),
-            path,
-        });
-        Ok(())
-    })?;
-    Ok(token)
+    state.with(|inner| Ok(inner.stage_import(path)))
 }
 
 fn pending_import_path(state: &State<'_, AppState>, token: &str) -> R<PathBuf> {
-    with_inner(state, |inner| match &inner.pending_import {
-        Some(p) if p.token == token => Ok(p.path.clone()),
-        _ => Err("that import is no longer pending — pick the store file again".into()),
+    state.with(|inner| {
+        inner
+            .pending_import(token)
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "that import is no longer pending — pick the store file again".into())
     })
 }
 
 #[tauri::command]
 pub async fn pick_import_store(app: AppHandle, state: State<'_, AppState>) -> R<Option<String>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Import an Envarsa store")
+    dialog_path(&app, |d| {
+        d.set_title("Import an Envarsa store")
             .add_filter("Envarsa store", &["store", "bak"])
             .add_filter("All files", &["*"])
             .blocking_pick_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            stage_import(&state, path).map(Some)
-        }
-    }
+    .await?
+    .map(|path| stage_import(&state, path))
+    .transpose()
 }
 
 /// First look at a store file before importing: is it encrypted, what

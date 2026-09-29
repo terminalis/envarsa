@@ -1,12 +1,11 @@
-use super::{latest_effective, mutate, with_inner, with_store, R};
+use super::{dialog_path, latest_effective, mutate, read_text_capped, with_store, R};
 use crate::envfile::{self, Line};
 use crate::state::{AppState, Session};
 use crate::store::{self, Project, Snapshot, Store};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_dialog::DialogExt;
 
 // -------------------------------------------------------------- projects
 
@@ -23,42 +22,57 @@ pub struct ProjectMeta {
     pub shared_keys: usize,
 }
 
+/// Every project's current entries (from its latest snapshot), by key:
+/// which projects hold each key, in store order, and with what value.
+/// Answers both the shared-key counts and the reuse badges.
+type KeyIndex<'a> = HashMap<String, Vec<(&'a Project, String)>>;
+
+fn key_index(store: &Store) -> KeyIndex<'_> {
+    let mut index = KeyIndex::new();
+    for p in &store.projects {
+        for (key, value) in latest_effective(p) {
+            index.entry(key).or_default().push((p, value));
+        }
+    }
+    index
+}
+
+/// The library listing, sorted by name.
+fn project_metas(store: &Store) -> Vec<ProjectMeta> {
+    // Per project id: (entry count, keys another project also holds).
+    let mut counts: HashMap<&str, (usize, usize)> = HashMap::new();
+    for holders in key_index(store).values() {
+        for (p, _) in holders {
+            let c = counts.entry(p.id.as_str()).or_default();
+            c.0 += 1;
+            if holders.iter().any(|(other, _)| other.id != p.id) {
+                c.1 += 1;
+            }
+        }
+    }
+    let mut metas: Vec<ProjectMeta> = store
+        .projects
+        .iter()
+        .map(|p| {
+            let (entry_count, shared_keys) = counts.get(p.id.as_str()).copied().unwrap_or_default();
+            ProjectMeta {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                path_hint: p.path_hint.clone(),
+                snapshot_count: p.snapshots.len(),
+                entry_count,
+                latest_captured_at: p.latest().map(|s| s.captured_at.clone()),
+                shared_keys,
+            }
+        })
+        .collect();
+    metas.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    metas
+}
+
 #[tauri::command]
 pub fn list_projects(state: State<'_, AppState>) -> R<Vec<ProjectMeta>> {
-    with_store(&state, |store| {
-        let all_effective: Vec<(String, Vec<(String, String)>)> = store
-            .projects
-            .iter()
-            .map(|p| (p.id.clone(), latest_effective(p)))
-            .collect();
-
-        let mut metas: Vec<ProjectMeta> = store
-            .projects
-            .iter()
-            .map(|p| {
-                let mine = latest_effective(p);
-                let shared = mine
-                    .iter()
-                    .filter(|(k, _)| {
-                        all_effective.iter().any(|(other_id, entries)| {
-                            other_id != &p.id && entries.iter().any(|(ok, _)| ok == k)
-                        })
-                    })
-                    .count();
-                ProjectMeta {
-                    id: p.id.clone(),
-                    name: p.name.clone(),
-                    path_hint: p.path_hint.clone(),
-                    snapshot_count: p.snapshots.len(),
-                    entry_count: mine.len(),
-                    latest_captured_at: p.latest().map(|s| s.captured_at.clone()),
-                    shared_keys: shared,
-                }
-            })
-            .collect();
-        metas.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-        Ok(metas)
-    })
+    with_store(&state, |store| Ok(project_metas(store)))
 }
 
 #[derive(Serialize)]
@@ -99,7 +113,6 @@ pub struct SnapshotMeta {
     pub id: String,
     pub captured_at: String,
     pub via: String,
-    pub source_path: Option<String>,
     pub entry_count: usize,
 }
 
@@ -109,13 +122,11 @@ pub struct ProjectView {
     pub id: String,
     pub name: String,
     pub path_hint: Option<String>,
-    pub created_at: String,
     /// Newest first.
     pub snapshots: Vec<SnapshotMeta>,
     pub snapshot_id: String,
     pub captured_at: String,
     pub via: String,
-    pub source_path: Option<String>,
     pub is_latest: bool,
     pub entry_count: usize,
     pub lines: Vec<LineView>,
@@ -128,34 +139,17 @@ pub fn get_project(
     snapshot_id: Option<String>,
 ) -> R<ProjectView> {
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = match &snapshot_id {
-            Some(id) => project
-                .snapshot(id)
-                .ok_or_else(|| "snapshot not found".to_string())?,
-            None => project
-                .latest()
-                .ok_or_else(|| "project has no snapshots".to_string())?,
-        };
+        let (project, snapshot) = store.find(&project_id, snapshot_id.as_deref())?;
         let is_latest = project
             .latest()
             .map(|s| s.id == snapshot.id)
             .unwrap_or(false);
 
-        // Other projects' current entries, for reuse flags.
-        let others: Vec<(&Project, Vec<(String, String)>)> = store
-            .projects
-            .iter()
-            .filter(|p| p.id != project.id)
-            .map(|p| (p, latest_effective(p)))
-            .collect();
-
+        let index = key_index(store);
         let lines = envfile::parse(&snapshot.raw);
 
         // Which keys are overridden by a later line in this snapshot?
-        let mut last_idx: std::collections::HashMap<&str, usize> = Default::default();
+        let mut last_idx: HashMap<&str, usize> = HashMap::new();
         for (i, line) in lines.iter().enumerate() {
             if let Line::Entry { key, .. } = line {
                 last_idx.insert(key.as_str(), i);
@@ -167,24 +161,22 @@ pub fn get_project(
             .enumerate()
             .map(|(idx, line)| match line {
                 Line::Blank => LineView::Blank,
-                Line::Comment(text) => LineView::Comment { text: text.clone() },
-                Line::Bad(_) => LineView::Bad { idx },
+                Line::Comment { text } => LineView::Comment { text: text.clone() },
+                Line::Bad { .. } => LineView::Bad { idx },
                 Line::Entry {
                     key,
                     value,
                     exported,
                 } => {
-                    let reuse = others
-                        .iter()
-                        .filter_map(|(p, entries)| {
-                            entries
-                                .iter()
-                                .find(|(k, _)| k == key)
-                                .map(|(_, v)| ReuseRef {
-                                    project_id: p.id.clone(),
-                                    name: p.name.clone(),
-                                    same: v == value,
-                                })
+                    let reuse = index
+                        .get(key)
+                        .into_iter()
+                        .flatten()
+                        .filter(|(p, _)| p.id != project.id)
+                        .map(|(p, v)| ReuseRef {
+                            project_id: p.id.clone(),
+                            name: p.name.clone(),
+                            same: v == value,
                         })
                         .collect();
                     LineView::Entry {
@@ -202,7 +194,6 @@ pub fn get_project(
             id: project.id.clone(),
             name: project.name.clone(),
             path_hint: project.path_hint.clone(),
-            created_at: project.created_at.clone(),
             snapshots: project
                 .snapshots
                 .iter()
@@ -211,14 +202,12 @@ pub fn get_project(
                     id: s.id.clone(),
                     captured_at: s.captured_at.clone(),
                     via: s.via.clone(),
-                    source_path: s.source_path.clone(),
                     entry_count: envfile::entry_count(&s.raw),
                 })
                 .collect(),
             snapshot_id: snapshot.id.clone(),
             captured_at: snapshot.captured_at.clone(),
             via: snapshot.via.clone(),
-            source_path: snapshot.source_path.clone(),
             is_latest,
             entry_count: envfile::entry_count(&snapshot.raw),
             lines: line_views,
@@ -234,7 +223,6 @@ pub struct CapturePreview {
     pub entries: usize,
     pub comments: usize,
     pub bad: usize,
-    pub keys: Vec<String>,
     pub dup_keys: Vec<String>,
 }
 
@@ -247,8 +235,8 @@ pub fn preview_capture(text: String) -> R<CapturePreview> {
     let mut bad = 0;
     for line in &lines {
         match line {
-            Line::Comment(_) => comments += 1,
-            Line::Bad(_) => bad += 1,
+            Line::Comment { .. } => comments += 1,
+            Line::Bad { .. } => bad += 1,
             Line::Entry { key, .. } => {
                 if keys.contains(key) {
                     if !dups.contains(key) {
@@ -265,7 +253,6 @@ pub fn preview_capture(text: String) -> R<CapturePreview> {
         entries: keys.len(),
         comments,
         bad,
-        keys,
         dup_keys: dups,
     })
 }
@@ -280,11 +267,7 @@ pub struct PickedFile {
 }
 
 fn read_env_file(path: &Path) -> R<PickedFile> {
-    let bytes = fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
-    if bytes.len() > 2_000_000 {
-        return Err("that file is larger than 2 MB — not an .env file?".into());
-    }
-    let text = String::from_utf8_lossy(&bytes).to_string();
+    let text = read_text_capped(path)?;
     let dir = path.parent().map(|p| p.to_string_lossy().to_string());
     // A .env usually lives in the project root, so the parent folder
     // name is a good default project name.
@@ -302,25 +285,13 @@ fn read_env_file(path: &Path) -> R<PickedFile> {
 
 #[tauri::command]
 pub async fn pick_env_file(app: AppHandle) -> R<Option<PickedFile>> {
-    let dialog = app.dialog().clone();
-    let picked = tauri::async_runtime::spawn_blocking(move || {
-        dialog
-            .file()
-            .set_title("Choose a .env file to capture")
+    dialog_path(&app, |d| {
+        d.set_title("Choose a .env file to capture")
             .blocking_pick_file()
     })
-    .await
-    .map_err(|e| format!("dialog failed: {e}"))?;
-
-    match picked {
-        None => Ok(None),
-        Some(fp) => {
-            let path = fp
-                .into_path()
-                .map_err(|e| format!("unsupported file location: {e}"))?;
-            read_env_file(&path).map(Some)
-        }
-    }
+    .await?
+    .map(|path| read_env_file(&path))
+    .transpose()
 }
 
 /// Drag/drop is handled as a window event so the path never round-trips
@@ -329,10 +300,9 @@ pub async fn pick_env_file(app: AppHandle) -> R<Option<PickedFile>> {
 /// to call.
 pub fn handle_drop(window: &tauri::Window, paths: &[PathBuf]) {
     let state = window.state::<AppState>();
-    let unlocked = with_inner(&state, |inner| {
-        Ok(matches!(inner.session, Session::Unlocked { .. }))
-    })
-    .unwrap_or(false);
+    let unlocked = state
+        .with(|inner| Ok(matches!(inner.session, Session::Unlocked { .. })))
+        .unwrap_or(false);
     if !unlocked {
         return;
     }
@@ -365,90 +335,72 @@ pub struct CaptureResult {
     pub entry_count: usize,
 }
 
-/// Resolve-or-create a project and push `snapshot` onto it, applying an
-/// optional path-hint update. Returns the project id. Shared by capture
-/// and the structured editor: by `project_id`, else by `project_name`,
-/// else a brand-new project.
-fn append_snapshot(
+/// Push `snapshot` onto a project, applying an optional path-hint
+/// update. Shared by capture and the structured editor: the project is
+/// found by `project_id`, else by `project_name`, else created under
+/// that name.
+fn add_snapshot(
     store: &mut Store,
     project_id: Option<&str>,
     project_name: Option<&str>,
-    hint: Option<String>,
+    path_hint: Option<&str>,
     snapshot: Snapshot,
-) -> R<String> {
-    if let Some(id) = project_id {
-        let p = store
-            .project_mut(id)
-            .ok_or_else(|| "project not found".to_string())?;
-        if let Some(h) = hint {
-            p.path_hint = Some(h);
-        }
-        p.snapshots.push(snapshot);
-        Ok(p.id.clone())
-    } else {
-        let name = project_name
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| "give the project a name".to_string())?;
-        if let Some(existing) = store.project_by_name(name).map(|p| p.id.clone()) {
-            let p = store.project_mut(&existing).unwrap();
-            if let Some(h) = hint {
-                p.path_hint = Some(h);
+) -> R<CaptureResult> {
+    let project_id = match project_id {
+        Some(id) => store.find_mut(id)?.id.clone(),
+        None => {
+            let name = project_name
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| "give the project a name".to_string())?;
+            match store.project_by_name(name) {
+                Some(existing) => existing.id.clone(),
+                None => {
+                    let project = Project {
+                        id: store::new_id(),
+                        name: name.to_string(),
+                        path_hint: None,
+                        created_at: store::now_iso(),
+                        snapshots: Vec::new(),
+                    };
+                    let id = project.id.clone();
+                    store.projects.push(project);
+                    id
+                }
             }
-            p.snapshots.push(snapshot);
-            Ok(existing)
-        } else {
-            let project = Project {
-                id: store::new_id(),
-                name: name.to_string(),
-                path_hint: hint,
-                created_at: store::now_iso(),
-                snapshots: vec![snapshot],
-            };
-            let id = project.id.clone();
-            store.projects.push(project);
-            Ok(id)
         }
+    };
+    let result = CaptureResult {
+        project_id: project_id.clone(),
+        snapshot_id: snapshot.id.clone(),
+        entry_count: envfile::entry_count(&snapshot.raw),
+    };
+    let p = store.find_mut(&project_id)?;
+    if let Some(hint) = path_hint.map(str::trim).filter(|s| !s.is_empty()) {
+        p.path_hint = Some(hint.to_string());
     }
-}
-
-fn trimmed_hint(hint: Option<&str>) -> Option<String> {
-    hint.map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
+    p.snapshots.push(snapshot);
+    Ok(result)
 }
 
 #[tauri::command]
 pub fn capture(state: State<'_, AppState>, args: CaptureArgs) -> R<CaptureResult> {
+    let via = if args.source_path.is_some() {
+        "file"
+    } else {
+        "paste"
+    };
+    let snapshot = Snapshot::new(via, args.source_path, args.text);
     mutate(&state, |store| {
-        let snapshot = Snapshot {
-            id: store::new_id(),
-            captured_at: store::now_iso(),
-            via: if args.source_path.is_some() {
-                "file".into()
-            } else {
-                "paste".into()
-            },
-            source_path: args.source_path.clone(),
-            raw: args.text.clone(),
-        };
-        let snapshot_id = snapshot.id.clone();
-        let entry_count = envfile::entry_count(&snapshot.raw);
-        let project_id = append_snapshot(
+        add_snapshot(
             store,
             args.project_id.as_deref(),
             args.project_name.as_deref(),
-            trimmed_hint(args.path_hint.as_deref()),
+            args.path_hint.as_deref(),
             snapshot,
-        )?;
-        Ok(CaptureResult {
-            project_id,
-            snapshot_id,
-            entry_count,
-        })
+        )
     })
 }
-
 // ----------------------------------------------------- structured editor
 //
 // The editor builds a draft line list in the webview, then saves it as a
@@ -456,47 +408,39 @@ pub fn capture(state: State<'_, AppState>, args: CaptureArgs) -> R<CaptureResult
 // text verbatim and history is preserved. This is also the store-only
 // "new project by hand" path: no file in, no file out.
 
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum EditLine {
-    Blank,
-    Comment {
-        text: String,
-    },
-    #[serde(rename_all = "camelCase")]
-    Entry {
-        key: String,
-        value: String,
-        exported: bool,
-    },
-    Bad {
-        raw: String,
-    },
-}
-
-fn edit_line_to_line(e: &EditLine) -> Line {
-    match e {
-        EditLine::Blank => Line::Blank,
-        EditLine::Comment { text } => {
+/// Tidy a line from the editor before it is saved: a comment stays on
+/// one line and starts with `#`; a key is trimmed and must be one the
+/// parser accepts.
+fn edited_line(line: Line) -> R<Line> {
+    Ok(match line {
+        Line::Comment { text } => {
             let t = text.replace(['\n', '\r'], " ");
             let t = t.trim_end();
-            if t.trim_start().starts_with('#') {
-                Line::Comment(t.to_string())
+            let text = if t.trim_start().starts_with('#') {
+                t.to_string()
             } else {
-                Line::Comment(format!("# {}", t.trim_start()))
-            }
+                format!("# {}", t.trim_start())
+            };
+            Line::Comment { text }
         }
-        EditLine::Entry {
+        Line::Entry {
             key,
             value,
             exported,
-        } => Line::Entry {
-            key: key.trim().to_string(),
-            value: value.clone(),
-            exported: *exported,
-        },
-        EditLine::Bad { raw } => Line::Bad(raw.clone()),
-    }
+        } => {
+            if !envfile::is_valid_key(key.trim()) {
+                return Err(format!(
+                    "\"{key}\" is not a valid key — keys can't be empty or contain spaces, #, \", or '"
+                ));
+            }
+            Line::Entry {
+                key: key.trim().to_string(),
+                value,
+                exported,
+            }
+        }
+        other => other,
+    })
 }
 
 /// Seed the editor from an existing snapshot (latest if none given).
@@ -507,36 +451,10 @@ pub fn edit_lines(
     state: State<'_, AppState>,
     project_id: String,
     snapshot_id: Option<String>,
-) -> R<Vec<EditLine>> {
+) -> R<Vec<Line>> {
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = match &snapshot_id {
-            Some(id) => project
-                .snapshot(id)
-                .ok_or_else(|| "snapshot not found".to_string())?,
-            None => project
-                .latest()
-                .ok_or_else(|| "project has no snapshots".to_string())?,
-        };
-        Ok(envfile::parse(&snapshot.raw)
-            .into_iter()
-            .map(|l| match l {
-                Line::Blank => EditLine::Blank,
-                Line::Comment(text) => EditLine::Comment { text },
-                Line::Entry {
-                    key,
-                    value,
-                    exported,
-                } => EditLine::Entry {
-                    key,
-                    value,
-                    exported,
-                },
-                Line::Bad(raw) => EditLine::Bad { raw },
-            })
-            .collect())
+        let (_, snapshot) = store.find(&project_id, snapshot_id.as_deref())?;
+        Ok(envfile::parse(&snapshot.raw))
     })
 }
 
@@ -546,7 +464,7 @@ pub struct SaveEditArgs {
     pub project_id: Option<String>,
     pub project_name: Option<String>,
     pub path_hint: Option<String>,
-    pub lines: Vec<EditLine>,
+    pub lines: Vec<Line>,
 }
 
 /// Save the edited lines as a new snapshot (`via: "edit"`). Resolves or
@@ -554,44 +472,20 @@ pub struct SaveEditArgs {
 /// path too. Validates keys before mutating.
 #[tauri::command]
 pub fn save_edited_snapshot(state: State<'_, AppState>, args: SaveEditArgs) -> R<CaptureResult> {
-    for line in &args.lines {
-        if let EditLine::Entry { key, .. } = line {
-            let k = key.trim();
-            let bad = k.is_empty()
-                || k.chars()
-                    .any(|c| c.is_whitespace() || c == '#' || c == '"' || c == '\'');
-            if bad {
-                return Err(format!(
-                    "\"{key}\" is not a valid key — keys can't be empty or contain spaces, #, \", or '"
-                ));
-            }
-        }
-    }
-    let lines: Vec<Line> = args.lines.iter().map(edit_line_to_line).collect();
-    let raw = envfile::serialize_lines(&lines);
-
+    let lines = args
+        .lines
+        .into_iter()
+        .map(edited_line)
+        .collect::<R<Vec<_>>>()?;
+    let snapshot = Snapshot::new("edit", None, envfile::serialize_lines(&lines));
     mutate(&state, |store| {
-        let snapshot = Snapshot {
-            id: store::new_id(),
-            captured_at: store::now_iso(),
-            via: "edit".into(),
-            source_path: None,
-            raw: raw.clone(),
-        };
-        let snapshot_id = snapshot.id.clone();
-        let entry_count = envfile::entry_count(&snapshot.raw);
-        let project_id = append_snapshot(
+        add_snapshot(
             store,
             args.project_id.as_deref(),
             args.project_name.as_deref(),
-            trimmed_hint(args.path_hint.as_deref()),
+            args.path_hint.as_deref(),
             snapshot,
-        )?;
-        Ok(CaptureResult {
-            project_id,
-            snapshot_id,
-            entry_count,
-        })
+        )
     })
 }
 
@@ -609,9 +503,7 @@ pub fn rename_project(state: State<'_, AppState>, project_id: String, name: Stri
                 return Err(format!("a project named \"{}\" already exists", other.name));
             }
         }
-        let p = store
-            .project_mut(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
+        let p = store.find_mut(&project_id)?;
         p.name = name.to_string();
         Ok(())
     })
@@ -620,9 +512,7 @@ pub fn rename_project(state: State<'_, AppState>, project_id: String, name: Stri
 #[tauri::command]
 pub fn set_path_hint(state: State<'_, AppState>, project_id: String, path_hint: String) -> R<()> {
     mutate(&state, |store| {
-        let p = store
-            .project_mut(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
+        let p = store.find_mut(&project_id)?;
         let trimmed = path_hint.trim();
         p.path_hint = if trimmed.is_empty() {
             None
@@ -653,21 +543,149 @@ pub fn promote_snapshot(
     snapshot_id: String,
 ) -> R<String> {
     mutate(&state, |store| {
-        let p = store
-            .project_mut(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
+        let p = store.find_mut(&project_id)?;
         let src = p
             .snapshot(&snapshot_id)
             .ok_or_else(|| "snapshot not found".to_string())?;
-        let snapshot = Snapshot {
-            id: store::new_id(),
-            captured_at: store::now_iso(),
-            via: "restore".into(),
-            source_path: src.source_path.clone(),
-            raw: src.raw.clone(),
-        };
+        let snapshot = Snapshot::new("restore", src.source_path.clone(), src.raw.clone());
         let id = snapshot.id.clone();
         p.snapshots.push(snapshot);
         Ok(id)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::fixtures::{project, store_of};
+
+    #[test]
+    fn metas_count_entries_and_keys_shared_with_other_projects() {
+        let store = store_of(vec![
+            project("web", "A=1\nB=2\nA=3\n"),
+            project("api", "B=2\nC=3\n"),
+            project("Tools", "D=4\n"),
+        ]);
+        let metas = project_metas(&store);
+        let row = |name: &str| metas.iter().find(|m| m.name == name).unwrap();
+        let names: Vec<&str> = metas.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(names, ["api", "Tools", "web"], "sorted case-insensitively");
+        assert_eq!((row("web").entry_count, row("web").shared_keys), (2, 1));
+        assert_eq!((row("api").entry_count, row("api").shared_keys), (2, 1));
+        assert_eq!((row("Tools").entry_count, row("Tools").shared_keys), (1, 0));
+    }
+
+    #[test]
+    fn the_index_holds_latest_values_in_store_order() {
+        let mut older = project("web", "A=old\n");
+        older
+            .snapshots
+            .push(Snapshot::new("paste", None, "A=1\nA=2\n".into()));
+        let store = store_of(vec![older, project("api", "A=2\n")]);
+        let index = key_index(&store);
+        let holders: Vec<(&str, &str)> = index["A"]
+            .iter()
+            .map(|(p, v)| (p.name.as_str(), v.as_str()))
+            .collect();
+        assert_eq!(holders, [("web", "2"), ("api", "2")]);
+    }
+
+    fn comment(text: &str) -> Line {
+        Line::Comment { text: text.into() }
+    }
+
+    #[test]
+    fn edited_comments_stay_on_one_line_and_start_with_a_hash() {
+        assert_eq!(edited_line(comment("# kept  ")).unwrap(), comment("# kept"));
+        assert_eq!(edited_line(comment("  note")).unwrap(), comment("# note"));
+        assert_eq!(
+            edited_line(comment("# two\nlines")).unwrap(),
+            comment("# two lines")
+        );
+    }
+
+    #[test]
+    fn edited_keys_are_trimmed_and_checked() {
+        let entry = |key: &str| Line::Entry {
+            key: key.into(),
+            value: " v ".into(),
+            exported: true,
+        };
+        assert_eq!(
+            edited_line(entry("  PORT ")).unwrap(),
+            Line::Entry {
+                key: "PORT".into(),
+                value: " v ".into(),
+                exported: true,
+            }
+        );
+        for bad in ["", "  ", "A B", "A#B", "A\"B", "A'B"] {
+            let err = edited_line(entry(bad)).unwrap_err();
+            assert!(err.contains("is not a valid key"), "{bad:?}: {err}");
+        }
+        let raw = Line::Bad {
+            raw: "not = a line".into(),
+        };
+        assert_eq!(edited_line(raw.clone()).unwrap(), raw);
+    }
+
+    fn paste(raw: &str) -> Snapshot {
+        Snapshot::new("paste", None, raw.into())
+    }
+
+    #[test]
+    fn add_snapshot_finds_by_id_then_by_name() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let id = store.projects[0].id.clone();
+
+        let r = add_snapshot(&mut store, Some(&id), None, None, paste("A=2\nB=3\n")).unwrap();
+        assert_eq!(r.project_id, id);
+        assert_eq!(r.entry_count, 2);
+        assert_eq!(store.projects[0].latest().unwrap().id, r.snapshot_id);
+
+        // By name: trimmed and case-insensitive, like every name match.
+        let r = add_snapshot(&mut store, None, Some("  ALPHA "), None, paste("A=4\n")).unwrap();
+        assert_eq!(r.project_id, id);
+        assert_eq!(store.projects.len(), 1);
+        assert_eq!(store.projects[0].snapshots.len(), 3);
+    }
+
+    #[test]
+    fn add_snapshot_creates_a_project_under_a_new_name() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let r = add_snapshot(
+            &mut store,
+            None,
+            Some(" beta "),
+            Some(" /work/beta "),
+            paste("X=1\n"),
+        )
+        .unwrap();
+        let beta = store.project(&r.project_id).unwrap();
+        assert_eq!(beta.name, "beta");
+        assert_eq!(beta.path_hint.as_deref(), Some("/work/beta"));
+        assert_eq!(beta.snapshots.len(), 1);
+    }
+
+    #[test]
+    fn add_snapshot_updates_the_hint_only_when_one_is_given() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let id = store.projects[0].id.clone();
+        add_snapshot(&mut store, Some(&id), None, Some("/a"), paste("A=2\n")).unwrap();
+        add_snapshot(&mut store, Some(&id), None, None, paste("A=3\n")).unwrap();
+        add_snapshot(&mut store, Some(&id), None, Some("   "), paste("A=4\n")).unwrap();
+        assert_eq!(store.projects[0].path_hint.as_deref(), Some("/a"));
+    }
+
+    #[test]
+    fn add_snapshot_refuses_an_unknown_id_or_a_blank_name() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let err = add_snapshot(&mut store, Some("nope"), None, None, paste("A=1\n"));
+        assert_eq!(err.err().unwrap(), "project not found");
+        let err = add_snapshot(&mut store, None, Some("  "), None, paste("A=1\n"));
+        assert_eq!(err.err().unwrap(), "give the project a name");
+        let err = add_snapshot(&mut store, None, None, None, paste("A=1\n"));
+        assert_eq!(err.err().unwrap(), "give the project a name");
+        assert_eq!(store.projects[0].snapshots.len(), 1, "nothing was pushed");
+    }
 }

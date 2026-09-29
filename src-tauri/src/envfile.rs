@@ -5,16 +5,27 @@
 //! on demand and is the single source of truth for what counts as an
 //! entry, so the display and the stored bytes can never drift apart.
 
-#[derive(Debug, Clone, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+/// One line of a .env file. It is also the structured editor's line
+/// model, so it crosses IPC as `{"kind": "entry", "key", "value",
+/// "exported"}`, `{"kind": "comment", "text"}`, `{"kind": "bad", "raw"}`
+/// or `{"kind": "blank"}`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Line {
     Blank,
-    Comment(String),
+    Comment {
+        text: String,
+    },
     Entry {
         key: String,
         value: String,
         exported: bool,
     },
-    Bad(String),
+    Bad {
+        raw: String,
+    },
 }
 
 pub fn parse(raw: &str) -> Vec<Line> {
@@ -29,7 +40,9 @@ pub fn parse(raw: &str) -> Vec<Line> {
         if trimmed.is_empty() {
             lines.push(Line::Blank);
         } else if trimmed.starts_with('#') {
-            lines.push(Line::Comment(trimmed.to_string()));
+            lines.push(Line::Comment {
+                text: trimmed.to_string(),
+            });
         } else {
             let (body, exported) = match trimmed.strip_prefix("export ") {
                 Some(rest) => (rest.trim_start(), true),
@@ -45,10 +58,14 @@ pub fn parse(raw: &str) -> Vec<Line> {
                             exported,
                         });
                     } else {
-                        lines.push(Line::Bad(line.to_string()));
+                        lines.push(Line::Bad {
+                            raw: line.to_string(),
+                        });
                     }
                 }
-                None => lines.push(Line::Bad(line.to_string())),
+                None => lines.push(Line::Bad {
+                    raw: line.to_string(),
+                }),
             }
         }
     }
@@ -189,8 +206,8 @@ fn unquoted_is_safe(v: &str) -> bool {
 pub fn serialize_line(line: &Line) -> String {
     match line {
         Line::Blank => String::new(),
-        Line::Comment(text) => text.clone(),
-        Line::Bad(raw) => raw.clone(),
+        Line::Comment { text } => text.clone(),
+        Line::Bad { raw } => raw.clone(),
         Line::Entry {
             key,
             value,
@@ -242,13 +259,9 @@ pub struct MergeReport {
 /// keep the target's comments, blanks, ordering, and each entry's
 /// `export`/casing; substitute values for keys the source has; apply
 /// `absent` to target keys the source lacks; then append source-only
-/// keys (source order) under one attribution comment.
-pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
-    merge_with_report(target_lines, source, absent).0
-}
-
-/// `merge`, plus the report of what it did — from the same pass, so a
-/// preview built from the report can't disagree with the bytes written.
+/// keys (source order) under one attribution comment. Returns the text
+/// and the report of what it did — from the same pass, so a preview
+/// built from the report can't disagree with the bytes written.
 pub fn merge_with_report(
     target_lines: &[Line],
     source: &[(String, String)],
@@ -310,7 +323,9 @@ pub fn merge_with_report(
         if !matches!(out.last(), None | Some(Line::Blank)) {
             out.push(Line::Blank);
         }
-        out.push(Line::Comment("# Added by Envarsa".to_string()));
+        out.push(Line::Comment {
+            text: "# Added by Envarsa".to_string(),
+        });
         for (k, v) in extra {
             report.added.push(k.clone());
             out.push(Line::Entry {
@@ -328,6 +343,10 @@ pub fn merge_with_report(
 mod tests {
     use super::*;
 
+    fn merge(target: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
+        merge_with_report(target, source, absent).0
+    }
+
     fn entry(lines: &[Line], idx: usize) -> (&str, &str, bool) {
         match &lines[idx] {
             Line::Entry {
@@ -344,7 +363,12 @@ mod tests {
         let raw = "# Database\nDATABASE_URL=postgres://localhost/dev\n\nPORT=3000\n";
         let lines = parse(raw);
         assert_eq!(lines.len(), 4);
-        assert_eq!(lines[0], Line::Comment("# Database".into()));
+        assert_eq!(
+            lines[0],
+            Line::Comment {
+                text: "# Database".into()
+            }
+        );
         assert_eq!(
             entry(&lines, 1),
             ("DATABASE_URL", "postgres://localhost/dev", false)
@@ -392,9 +416,9 @@ mod tests {
     #[test]
     fn marks_bad_lines() {
         let lines = parse("not a line\nBAD KEY=1\n=nokey");
-        assert!(matches!(lines[0], Line::Bad(_)));
-        assert!(matches!(lines[1], Line::Bad(_)));
-        assert!(matches!(lines[2], Line::Bad(_)));
+        assert!(matches!(lines[0], Line::Bad { .. }));
+        assert!(matches!(lines[1], Line::Bad { .. }));
+        assert!(matches!(lines[2], Line::Bad { .. }));
     }
 
     #[test]
@@ -449,9 +473,16 @@ mod tests {
     #[test]
     fn serialize_line_is_verbatim_for_non_entries_and_honors_export() {
         assert_eq!(serialize_line(&Line::Blank), "");
-        assert_eq!(serialize_line(&Line::Comment("# note".into())), "# note");
         assert_eq!(
-            serialize_line(&Line::Bad("Authorization: Bearer x".into())),
+            serialize_line(&Line::Comment {
+                text: "# note".into()
+            }),
+            "# note"
+        );
+        assert_eq!(
+            serialize_line(&Line::Bad {
+                raw: "Authorization: Bearer x".into()
+            }),
             "Authorization: Bearer x"
         );
         assert_eq!(
@@ -523,7 +554,10 @@ mod tests {
         ];
 
         let (text, r) = merge_with_report(&target, &source, AbsentPolicy::KeepTarget);
-        assert_eq!(text, merge(&target, &source, AbsentPolicy::KeepTarget));
+        assert_eq!(
+            text,
+            "# t\nA=1\nB=new\nexport C=3\nB=new\n\n# Added by Envarsa\nD=d\nE=e\n"
+        );
         assert_eq!(
             r,
             MergeReport {
@@ -562,5 +596,23 @@ mod tests {
             merge(&target, &source, AbsentPolicy::KeepTarget),
             "export TOKEN=new\n"
         );
+    }
+
+    /// The editor's JSON is exactly what the old EditLine sent and read.
+    #[test]
+    fn lines_cross_ipc_in_the_editor_shape() {
+        let lines = parse("# c\n\nexport A=1\nBAD LINE\n");
+        let json = serde_json::to_value(&lines).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!([
+                { "kind": "comment", "text": "# c" },
+                { "kind": "blank" },
+                { "kind": "entry", "key": "A", "value": "1", "exported": true },
+                { "kind": "bad", "raw": "BAD LINE" },
+            ])
+        );
+        let back: Vec<Line> = serde_json::from_value(json).unwrap();
+        assert_eq!(back, lines);
     }
 }

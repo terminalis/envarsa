@@ -10,13 +10,16 @@
 //! or the user has turned on the automatic check (off by default) —
 //! then at most once per 24h, shortly after launch.
 
+use crate::commands::selftest_active;
 use crate::state::{self, AppState};
+use serde::Serialize;
 use std::time::Duration;
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 /// Opened in the browser when an update is found. A compile-time
 /// constant — nothing fetched ever becomes a link.
-pub const RELEASES_PAGE_URL: &str = "https://github.com/terminalis/envarsa/releases/latest";
+const RELEASES_PAGE_URL: &str = "https://github.com/terminalis/envarsa/releases/latest";
 const LATEST_RELEASE_API: &str = "https://api.github.com/repos/terminalis/envarsa/releases/latest";
 const TIMEOUT: Duration = Duration::from_secs(8);
 /// The release JSON is ~10-30 KB; cap reads hard anyway.
@@ -122,10 +125,10 @@ pub fn is_packaged() -> bool {
 /// The automatic path: spawned once at startup, does nothing unless the
 /// user opted in and a check is due. Failures are silent by design —
 /// the manual button is the loud path.
-pub fn maybe_spawn_auto_check(app: tauri::AppHandle) {
+pub fn maybe_spawn_auto_check(app: AppHandle) {
     // The selftest must stay offline and deterministic — and it reads
     // the user's real config.json, where the toggle may be on.
-    if std::env::var("ENVARSA_SELFTEST").is_ok() {
+    if selftest_active() {
         return;
     }
     // Store builds update through the Store; the in-app check points at
@@ -174,7 +177,7 @@ pub fn maybe_spawn_auto_check(app: tauri::AppHandle) {
 /// `latest` only while it is newer than the running version, and persist
 /// both. Best effort — a config-write failure must not eat a good answer.
 /// Returns whether `latest` is newer.
-pub fn record_check(app: &tauri::AppHandle, latest: &semver::Version) -> bool {
+pub fn record_check(app: &AppHandle, latest: &semver::Version) -> bool {
     let now = chrono::Utc::now().timestamp();
     let current = &app.package_info().version;
     let newer = latest > current;
@@ -193,6 +196,58 @@ fn apply_check(
 ) {
     config.last_update_check = Some(now);
     config.available_version = (latest > current).then(|| latest.to_string());
+}
+
+// -------------------------------------------------------------- commands
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckResult {
+    pub latest: String,
+    pub update_available: bool,
+}
+
+/// The manual "Check for updates" button — the loud path: failures come
+/// back as errors for the settings modal to show inline. A manual check
+/// legitimately postpones the next automatic one.
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheckResult, String> {
+    if selftest_active() {
+        return Err("update checks are disabled during selftest".into());
+    }
+    if is_packaged() {
+        return Err(
+            "This is the Microsoft Store build — it updates through the Store, so the in-app check is off."
+                .into(),
+        );
+    }
+    let latest = tauri::async_runtime::spawn_blocking(fetch_latest_version)
+        .await
+        .map_err(|e| format!("update check failed: {e}"))??;
+    let update_available = record_check(&app, &latest);
+    Ok(UpdateCheckResult {
+        latest: latest.to_string(),
+        update_available,
+    })
+}
+
+#[tauri::command]
+pub fn set_auto_update_check(state: State<'_, AppState>, enabled: bool) -> Result<(), String> {
+    state.with(|inner| {
+        inner.config.auto_update_check = enabled;
+        // This save failure does surface — the UI reverts the toggle.
+        state::save_config(&inner.config_path, &inner.config)
+    })
+}
+
+/// Opens the releases page in the default browser. The URL is a
+/// compile-time constant — nothing fetched ever becomes a link, and the
+/// webview holds no URL-opening primitive of its own.
+#[tauri::command]
+pub fn open_releases_page(app: AppHandle) -> Result<(), String> {
+    app.opener()
+        .open_url(RELEASES_PAGE_URL, None::<&str>)
+        .map_err(|e| format!("could not open the releases page: {e}"))
 }
 
 #[cfg(test)]

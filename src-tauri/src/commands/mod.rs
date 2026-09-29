@@ -11,65 +11,67 @@ pub(crate) mod secrets;
 pub(crate) mod selftest;
 pub(crate) mod session;
 pub(crate) mod transfer;
-pub(crate) mod updates;
 
 use crate::envfile;
-use crate::state::{AppState, Inner, Session};
+use crate::state::AppState;
 use crate::store::{self, Project, Store};
-use tauri::State;
+use std::path::{Path, PathBuf};
+use tauri::{AppHandle, State, Wry};
+use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 
 pub(crate) type R<T> = Result<T, String>;
 
-fn selftest_active() -> bool {
+pub(crate) fn selftest_active() -> bool {
     std::env::var("ENVARSA_SELFTEST").is_ok()
-}
-
-fn with_inner<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Inner) -> R<T>) -> R<T> {
-    let mut guard = state
-        .0
-        .lock()
-        .map_err(|_| "internal: state poisoned".to_string())?;
-    let inner = guard
-        .as_mut()
-        .ok_or_else(|| "app is still starting".to_string())?;
-    f(inner)
 }
 
 /// Read-only access to the unlocked store.
 fn with_store<T>(state: &State<'_, AppState>, f: impl FnOnce(&Store) -> R<T>) -> R<T> {
-    with_inner(state, |inner| match &inner.session {
-        Session::Unlocked { store, .. } => f(store),
-        Session::Locked => Err("the store is locked".into()),
-        Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
+    state.with(|inner| f(inner.session.unlocked()?))
+}
+
+/// Mutate a copy of the unlocked store, persist it durably, and only
+/// then make it live — memory never gets ahead of disk.
+fn mutate<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Store) -> R<T>) -> R<T> {
+    state.with(|inner| {
+        let path = inner.store_path.clone();
+        let (store, passphrase) = inner.session.unlocked_mut()?;
+        let mut next = store.clone();
+        let out = f(&mut next)?;
+        store::save(&mut next, &path, passphrase.as_deref())
+            .map_err(|e| format!("could not save the store: {e}"))?;
+        *store = next;
+        Ok(out)
     })
 }
 
-/// Mutate the unlocked store, then persist it durably. The mutation is
-/// only kept if the save succeeds.
-fn mutate<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Store) -> R<T>) -> R<T> {
-    with_inner(state, |inner| {
-        let path = inner.store_path.clone();
-        match &mut inner.session {
-            Session::Unlocked { store, passphrase } => {
-                let before = store.clone();
-                match f(store) {
-                    Ok(out) => match store::save(store, &path, passphrase.as_deref()) {
-                        Ok(()) => Ok(out),
-                        Err(e) => {
-                            *store = before; // roll back the in-memory state
-                            Err(format!("could not save the store: {e}"))
-                        }
-                    },
-                    Err(e) => {
-                        *store = before;
-                        Err(e)
-                    }
-                }
-            }
-            Session::Locked => Err("the store is locked".into()),
-            Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
-        }
-    })
+/// Run a native file dialog on a worker thread and resolve the picked
+/// path. `Ok(None)` means the user cancelled.
+async fn dialog_path(
+    app: &AppHandle,
+    open: impl FnOnce(FileDialogBuilder<Wry>) -> Option<FilePath> + Send + 'static,
+) -> R<Option<PathBuf>> {
+    let dialog = app.dialog().clone();
+    let picked = tauri::async_runtime::spawn_blocking(move || open(dialog.file()))
+        .await
+        .map_err(|e| format!("dialog failed: {e}"))?;
+    picked
+        .map(|fp| {
+            fp.into_path()
+                .map_err(|e| format!("unsupported file location: {e}"))
+        })
+        .transpose()
+}
+
+/// Read a user-picked text file (an .env, an example, a merge target),
+/// lossily as UTF-8, refusing anything over 2 MB.
+fn read_text_capped(path: &Path) -> R<String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    if bytes.len() > 2_000_000 {
+        return Err("that file is larger than 2 MB — too big for an .env file".into());
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn latest_effective(project: &Project) -> Vec<(String, String)> {

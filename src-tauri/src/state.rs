@@ -103,7 +103,6 @@ pub enum Session {
 
 impl Session {
     /// The store, or why there isn't one to use.
-    #[allow(dead_code)] // Not yet called from commands.rs.
     pub fn unlocked(&self) -> Result<&Store, String> {
         match self {
             Session::Unlocked { store, .. } => Ok(store),
@@ -161,6 +160,43 @@ pub struct Inner {
 }
 
 impl Inner {
+    pub fn new(
+        store_path: PathBuf,
+        config_path: PathBuf,
+        config: Config,
+        env_override: bool,
+        session: Session,
+    ) -> Self {
+        Inner {
+            store_path,
+            config_path,
+            config,
+            env_override,
+            session,
+            pending_import: None,
+            pending_target: None,
+            pending_example: None,
+        }
+    }
+
+    /// Stage a picked import file and return its token. A new pick
+    /// replaces the previous one.
+    pub fn stage_import(&mut self, path: PathBuf) -> String {
+        let token = store::new_id();
+        self.pending_import = Some(PendingImport {
+            token: token.clone(),
+            path,
+        });
+        token
+    }
+
+    pub fn pending_import(&self, token: &str) -> Option<&Path> {
+        self.pending_import
+            .as_ref()
+            .filter(|p| p.token == token)
+            .map(|p| p.path.as_path())
+    }
+
     /// Stage a write and return its token.
     pub fn stage_write(&mut self, path: PathBuf, template: Option<String>) -> String {
         let token = store::new_id();
@@ -518,16 +554,24 @@ mod tests {
     }
 
     fn inner() -> Inner {
-        Inner {
-            store_path: PathBuf::from("envarsa.store"),
-            config_path: PathBuf::from("config.json"),
-            config: Config::default(),
-            env_override: false,
-            session: Session::Locked,
-            pending_import: None,
-            pending_target: None,
-            pending_example: None,
-        }
+        Inner::new(
+            PathBuf::from("envarsa.store"),
+            PathBuf::from("config.json"),
+            Config::default(),
+            false,
+            Session::Locked,
+        )
+    }
+
+    #[test]
+    fn a_new_import_pick_replaces_the_staged_one() {
+        let mut i = inner();
+        let first = i.stage_import(PathBuf::from("/a.store"));
+        assert_eq!(i.pending_import(&first), Some(Path::new("/a.store")));
+        let second = i.stage_import(PathBuf::from("/b.store"));
+        assert!(i.pending_import(&first).is_none(), "old pick replaced");
+        assert_eq!(i.pending_import(&second), Some(Path::new("/b.store")));
+        assert!(i.pending_import("not-a-token").is_none());
     }
 
     /// The write modal's two tabs stage independently: picking on one
