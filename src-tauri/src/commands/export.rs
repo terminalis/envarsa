@@ -1,7 +1,7 @@
 use super::session::check_passphrase;
 use super::{dialog_path, read_text_capped, selftest_active, with_store, R};
 use crate::crypto;
-use crate::envfile::{self, merge_with_report, AbsentPolicy, Line, MergeReport};
+use crate::envfile::{self, merge_with_report, AbsentPolicy, MergeReport};
 use crate::envpath::classify_name;
 use crate::state::AppState;
 use crate::store;
@@ -370,9 +370,7 @@ pub struct ExampleStaged {
     /// Display only — the staged output path (`<example dir>/.env.local`).
     pub out_path: String,
     pub out_class: String,
-    pub out_exists: bool,
     pub example_keys: Vec<String>,
-    pub example_comments: usize,
 }
 
 /// Pick a `.env.example` to use as a template. Only its text is read; the
@@ -400,23 +398,16 @@ pub async fn pick_example_file(
         .parent()
         .map(|d| d.join(".env.local"))
         .ok_or_else(|| "that file has no parent directory".to_string())?;
-    let lines = envfile::parse(&template);
-    let example_keys: Vec<String> = envfile::effective_entries(&lines)
+    let example_keys: Vec<String> = envfile::effective_entries(&envfile::parse(&template))
         .into_iter()
         .map(|(k, _)| k)
         .collect();
-    let example_comments = lines
-        .iter()
-        .filter(|l| matches!(l, Line::Comment { .. }))
-        .count();
     Ok(Some(ExampleStaged {
         out_class: classify_name(&out_path).as_str().to_string(),
-        out_exists: out_path.exists(),
         out_path: out_path.to_string_lossy().to_string(),
         token: stage_write(&state, out_path, Some(template))?,
         example_name,
         example_keys,
-        example_comments,
     }))
 }
 

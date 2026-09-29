@@ -113,7 +113,6 @@ pub struct SnapshotMeta {
     pub id: String,
     pub captured_at: String,
     pub via: String,
-    pub source_path: Option<String>,
     pub entry_count: usize,
 }
 
@@ -123,13 +122,11 @@ pub struct ProjectView {
     pub id: String,
     pub name: String,
     pub path_hint: Option<String>,
-    pub created_at: String,
     /// Newest first.
     pub snapshots: Vec<SnapshotMeta>,
     pub snapshot_id: String,
     pub captured_at: String,
     pub via: String,
-    pub source_path: Option<String>,
     pub is_latest: bool,
     pub entry_count: usize,
     pub lines: Vec<LineView>,
@@ -197,7 +194,6 @@ pub fn get_project(
             id: project.id.clone(),
             name: project.name.clone(),
             path_hint: project.path_hint.clone(),
-            created_at: project.created_at.clone(),
             snapshots: project
                 .snapshots
                 .iter()
@@ -206,14 +202,12 @@ pub fn get_project(
                     id: s.id.clone(),
                     captured_at: s.captured_at.clone(),
                     via: s.via.clone(),
-                    source_path: s.source_path.clone(),
                     entry_count: envfile::entry_count(&s.raw),
                 })
                 .collect(),
             snapshot_id: snapshot.id.clone(),
             captured_at: snapshot.captured_at.clone(),
             via: snapshot.via.clone(),
-            source_path: snapshot.source_path.clone(),
             is_latest,
             entry_count: envfile::entry_count(&snapshot.raw),
             lines: line_views,
@@ -229,7 +223,6 @@ pub struct CapturePreview {
     pub entries: usize,
     pub comments: usize,
     pub bad: usize,
-    pub keys: Vec<String>,
     pub dup_keys: Vec<String>,
 }
 
@@ -260,7 +253,6 @@ pub fn preview_capture(text: String) -> R<CapturePreview> {
         entries: keys.len(),
         comments,
         bad,
-        keys,
         dup_keys: dups,
     })
 }

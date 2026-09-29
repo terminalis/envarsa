@@ -203,7 +203,6 @@ fn apply_check(
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCheckResult {
-    pub current: String,
     pub latest: String,
     pub update_available: bool,
 }
@@ -227,7 +226,6 @@ pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheckResult, Stri
         .map_err(|e| format!("update check failed: {e}"))??;
     let update_available = record_check(&app, &latest);
     Ok(UpdateCheckResult {
-        current: app.package_info().version.to_string(),
         latest: latest.to_string(),
         update_available,
     })
