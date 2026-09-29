@@ -30,7 +30,7 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
 
 - Fresh clone: `tauri.windows.conf.json` bundles `target/release/WebView2Loader.dll` as a resource, and
   tauri-build won't build (even `cargo test`) until it exists. The *Stage WebView2Loader.dll* step in
-  `.github/workflows/release.yml` is the recipe. Linux needs no staging.
+  `.github/actions/setup-windows-gnu/action.yml` is the recipe. Linux needs no staging.
 - **windows-gnu:** rustc must keep its self-contained linker — do **not** put `x86_64-w64-mingw32-gcc` on PATH
   (its CRT clashes with rustup's MinGW objects). The resource step needs binutils' `windres`/`dlltool`/`as`
   plus an *unprefixed* `gcc`; a stock MinGW-w64 with prefixed aliases removed satisfies both. MSVC needs none.

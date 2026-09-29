@@ -1,12 +1,14 @@
 # Checks every pull request before review: formatting, the Rust test suite,
 # and the IPC contract between the webview and the Rust core.
 #
-# Runs on ubuntu-22.04 to match the Linux release build (see release.yml), with
-# the README's Linux prerequisites. It uses the runner's preinstalled stable
-# Rust, which includes rustfmt, the same as release.yml.
+# `check` runs on ubuntu-22.04 to match the Linux release build (see
+# release.yml), with the README's Linux prerequisites. It uses the runner's
+# preinstalled stable Rust, which includes rustfmt, the same as release.yml.
 #
-# Windows-only code (#[cfg(windows)]) doesn't compile here; a workflow_dispatch
-# run of release.yml covers it.
+# `test-windows` runs the same test suite on the windows-gnu toolchain the
+# release uses, so Windows-only code (#[cfg(windows)]: the clipboard history
+# exclusion, the Store package check, the title bar) compiles and is tested on
+# every pull request, not only when a release is built.
 
 name: ci
 
@@ -38,3 +40,14 @@ jobs:
 
       - name: Check IPC contract
         run: tools/check-contract.sh
+
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-windows-gnu
+
+      - name: Run tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
