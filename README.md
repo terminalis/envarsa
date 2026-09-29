@@ -14,11 +14,12 @@ Prereqs — **Windows:** Rust (`x86_64-pc-windows-gnu`, see note), Node, WebView
 npm install
 npm run dev      # tauri dev
 npm run build    # Windows: exe + NSIS · Linux: AppImage + .deb
-cd src-tauri && cargo test
+cd src-tauri && cargo test     # includes every IPC command end to end
+bash tools/check-contract.sh   # the webview and the core agree on commands and events
 ```
 
-End-to-end selftest: `ENVARSA_SELFTEST=1 ENVARSA_STORE_PATH=/tmp/st.envarsa ./target/debug/envarsa`.
-`ENVARSA_STORE_PATH` overrides the store location; `ENVARSA_DEMO=1` seeds sample projects.
+`ENVARSA_STORE_PATH` overrides the store location; `ENVARSA_DEMO=1` seeds sample projects. Serving `ui/` from
+any static server opens the UI in a plain browser against canned responses (`ui/js/mock.js`).
 
 The app version lives only in `src-tauri/Cargo.toml`; Tauri and the release workflow read it from there.
 `src-tauri/icons/` keeps just the icons the bundles use. `npx tauri icon <source.png>` regenerates the full set

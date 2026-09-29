@@ -144,18 +144,19 @@ export const actions = {
       focusNext('#capture-project');
       return;
     }
-    const existing = findProject(S.projects, name);
+    // Rust resolves the name: an existing project (trimmed, any case) or
+    // a new one.
     const res = await api.capture({
-      projectId: existing ? existing.id : null,
-      projectName: existing ? null : name,
+      projectName: name,
       pathHint: m.pathHint.trim() || null,
       text,
-      sourcePath: m.tab === 'file' ? m.picked?.path ?? null : null,
+      sourceToken: m.tab === 'file' ? m.picked?.token ?? null : null,
     });
     S.modal = null;
     await loadProjects();
     await selectProject(res.projectId);
-    toast(`Captured ${plural(res.entryCount, 'entry', 'entries')} into ${existing ? existing.name : name}`);
+    const project = S.projects.find((p) => p.id === res.projectId);
+    toast(`Captured ${plural(res.entryCount, 'entry', 'entries')} into ${project ? project.name : name}`);
   }),
 };
 

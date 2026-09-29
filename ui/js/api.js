@@ -1,9 +1,11 @@
 // Thin wrappers over the IPC surface. Every call goes to the Rust core;
 // the UI never touches the filesystem, clipboard, or dialogs itself.
-// Values only ever arrive here through an explicit reveal.
+// Values arrive only through an explicit reveal, or seeded into the
+// editor by editLines. Paths never go back: picked files and write
+// targets come back as opaque tokens, and their paths are for display.
 //
-// Outside Tauri (plain browser, UI iteration) a fixture-backed mock
-// stands in — see mock.js. It never activates inside the app.
+// Outside Tauri (plain browser, UI iteration) canned responses stand
+// in — see mock.js. It never activates inside the app.
 if (!window.__TAURI__) {
   const { installMock } = await import('./mock.js');
   installMock();
@@ -32,20 +34,19 @@ export const api = {
 
   // Write a project's values out to a .env.local. The target path is
   // staged Rust-side behind an opaque token; only the token comes back.
+  // A token from pickExampleFile fills that example instead, and
+  // ignores `merge`.
   stageWriteTarget: (projectId, snapshotId) => invoke('stage_write_target', { projectId, snapshotId }),
   pickWriteTarget: (suggestedDir = null) => invoke('pick_write_target', { suggestedDir }),
-  previewWrite: (projectId, snapshotId, token, mode) => invoke('preview_write', { projectId, snapshotId, token, mode }),
-  writeEnvLocal: (projectId, snapshotId, token, mode) => invoke('write_env_local', { projectId, snapshotId, token, mode }),
   pickExampleFile: () => invoke('pick_example_file'),
-  previewExampleWrite: (projectId, snapshotId, token) => invoke('preview_example_write', { projectId, snapshotId, token }),
-  writeExampleScaffold: (projectId, snapshotId, token) => invoke('write_example_scaffold', { projectId, snapshotId, token }),
+  previewWrite: (projectId, snapshotId, token, merge) => invoke('preview_write', { projectId, snapshotId, token, merge }),
+  writeEnvLocal: (projectId, snapshotId, token, merge) => invoke('write_env_local', { projectId, snapshotId, token, merge }),
 
   // Structured editor: seed from a snapshot, save back as a new one.
   editLines: (projectId, snapshotId = null) => invoke('edit_lines', { projectId, snapshotId }),
   saveEditedSnapshot: (args) => invoke('save_edited_snapshot', { args }),
 
-  renameProject: (projectId, name) => invoke('rename_project', { projectId, name }),
-  setPathHint: (projectId, pathHint) => invoke('set_path_hint', { projectId, pathHint }),
+  updateProject: (projectId, name, pathHint) => invoke('update_project', { projectId, name, pathHint }),
   deleteProject: (projectId) => invoke('delete_project', { projectId }),
   promoteSnapshot: (projectId, snapshotId) => invoke('promote_snapshot', { projectId, snapshotId }),
 
@@ -68,17 +69,4 @@ export const api = {
   openReleasesPage: () => invoke('open_releases_page'),
 
   uiLog: (level, message) => invoke('ui_log', { level, message }).catch(() => {}),
-
-  selftest: {
-    enabled: () => invoke('selftest_enabled'),
-    readClipboard: () => invoke('selftest_read_clipboard'),
-    setClipboard: (text) => invoke('selftest_set_clipboard', { text }),
-    readFile: (path) => invoke('selftest_read_file', { path }),
-    stageImport: (path) => invoke('selftest_stage_import', { path }),
-    stageWrite: (path) => invoke('selftest_stage_write', { path }),
-    stageExample: (outPath, template) => invoke('selftest_stage_example', { outPath, template }),
-    exportToPath: (projectId, snapshotId, path) => invoke('export_to_path', { projectId, snapshotId, path }),
-    exportStoreToPath: (path, passphrase = null) => invoke('export_store_to_path', { path, passphrase }),
-    done: (passed, failed, report) => invoke('selftest_done', { passed, failed, report }),
-  },
 };

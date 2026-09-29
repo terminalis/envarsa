@@ -1,5 +1,5 @@
 use super::session::check_passphrase;
-use super::{dialog_path, read_text_capped, selftest_active, with_store, R};
+use super::{dialog_path, read_text_capped, with_store, R};
 use crate::crypto;
 use crate::envfile::{self, merge_with_report, AbsentPolicy, MergeReport};
 use crate::envpath::classify_name;
@@ -21,10 +21,7 @@ pub async fn export_snapshot(
     project_id: String,
     snapshot_id: String,
 ) -> R<Option<String>> {
-    let (raw, suggested) = with_store(&state, |store| {
-        let (project, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
-        Ok((snapshot.raw.clone(), format!("{}.env", project.name)))
-    })?;
+    let (raw, suggested) = snapshot_export(&state, &project_id, &snapshot_id)?;
 
     let Some(path) = dialog_path(&app, move |d| {
         d.set_title("Export snapshot as .env")
@@ -40,22 +37,15 @@ pub async fn export_snapshot(
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// Test hook: export without a dialog. Only honored when the selftest
-/// env var is set, so the "user places the file" rule can't be bypassed
-/// in normal runs.
-#[tauri::command]
-pub fn export_to_path(
-    state: State<'_, AppState>,
-    project_id: String,
-    snapshot_id: String,
-    path: String,
-) -> R<()> {
-    if !selftest_active() {
-        return Err("export_to_path is a selftest-only command".into());
-    }
-    with_store(&state, |store| {
-        let (_, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
-        fs::write(&path, snapshot.raw.as_bytes()).map_err(|e| e.to_string())
+/// A snapshot's exact bytes, and the file name to suggest for them.
+pub(super) fn snapshot_export(
+    state: &State<'_, AppState>,
+    project_id: &str,
+    snapshot_id: &str,
+) -> R<(String, String)> {
+    with_store(state, |store| {
+        let (project, snapshot) = store.find(project_id, Some(snapshot_id))?;
+        Ok((snapshot.raw.clone(), format!("{}.env", project.name)))
     })
 }
 
@@ -63,7 +53,10 @@ pub fn export_to_path(
 
 /// Serialize the live store, optionally encrypting the copy with a
 /// transport passphrase (independent of the at-rest one).
-fn store_copy_bytes(state: &State<'_, AppState>, passphrase: Option<&str>) -> R<Vec<u8>> {
+pub(super) fn store_copy_bytes(
+    state: &State<'_, AppState>,
+    passphrase: Option<&str>,
+) -> R<Vec<u8>> {
     if let Some(p) = passphrase {
         check_passphrase(p)?;
     }
@@ -100,20 +93,6 @@ pub async fn export_store(
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
-/// Test hook: export the store copy without a dialog. Selftest-only.
-#[tauri::command]
-pub fn export_store_to_path(
-    state: State<'_, AppState>,
-    path: String,
-    passphrase: Option<String>,
-) -> R<()> {
-    if !selftest_active() {
-        return Err("export_store_to_path is a selftest-only command".into());
-    }
-    let bytes = store_copy_bytes(&state, passphrase.as_deref())?;
-    fs::write(&path, &bytes).map_err(|e| e.to_string())
-}
-
 // ------------------------------------------------------ write .env.local
 //
 // The one place Envarsa writes into a project tree. The target is always
@@ -131,11 +110,7 @@ fn guard_writable_local(path: &Path) -> R<()> {
     }
 }
 
-pub(crate) fn stage_write(
-    state: &State<'_, AppState>,
-    path: PathBuf,
-    template: Option<String>,
-) -> R<String> {
+fn stage_write(state: &State<'_, AppState>, path: PathBuf, template: Option<String>) -> R<String> {
     state.with(|inner| Ok(inner.stage_write(path, template)))
 }
 
@@ -146,33 +121,32 @@ fn clear_pending_write(state: &State<'_, AppState>) {
     });
 }
 
-/// How a staged write fills its target.
+/// How a staged write fills its target. The staged kind decides: a
+/// write staged with an example template fills the example.
 enum Fill {
     /// The write dialog's target tab: the snapshot's own lines, merged
-    /// into an existing target when `mode` is "merge".
-    Snapshot { mode: String },
+    /// into an existing target when `merge` is set.
+    Snapshot { merge: bool },
     /// The example tab: the snapshot's values poured into an example's
     /// comments and keys; keys the snapshot lacks are blanked.
     Example { template: String },
 }
 
-/// Look up a staged write by token. `mode` is the target tab's write
-/// mode; `None` means the example tab, whose staging carries a template.
-fn staged(state: &State<'_, AppState>, token: &str, mode: Option<String>) -> R<(PathBuf, Fill)> {
-    let (path, template) = state.with(|inner| {
-        inner
+/// Look up a staged write by token. `merge` applies to a plain target;
+/// an example scaffold always fills its template.
+fn staged(state: &State<'_, AppState>, token: &str, merge: bool) -> R<(PathBuf, Fill)> {
+    state.with(|inner| {
+        let p = inner
             .pending_write(token)
-            .map(|p| (p.path.clone(), p.template.clone()))
-            .ok_or_else(|| "that write is no longer staged — choose the location again".into())
-    })?;
-    let fill = match mode {
-        Some(mode) => Fill::Snapshot { mode },
-        None => Fill::Example {
-            template: template
-                .ok_or_else(|| "that staged write has no example template".to_string())?,
-        },
-    };
-    Ok((path, fill))
+            .ok_or("that write is no longer staged — choose the location again")?;
+        let fill = match &p.template {
+            Some(template) => Fill::Example {
+                template: template.clone(),
+            },
+            None => Fill::Snapshot { merge },
+        };
+        Ok((p.path.clone(), fill))
+    })
 }
 
 /// The text a write puts at `path`, and its preview. Preview and write
@@ -180,26 +154,22 @@ fn staged(state: &State<'_, AppState>, token: &str, mode: Option<String>) -> R<(
 fn plan_write(path: &Path, fill: &Fill, raw: &str) -> R<(String, WritePreview)> {
     let snap_lines = envfile::parse(raw);
     let source = envfile::effective_entries(&snap_lines);
-    let (text, report, mode) = match fill {
+    let (text, report) = match fill {
         Fill::Example { template } => {
             let target = envfile::parse(template);
-            let (text, report) = merge_with_report(&target, &source, AbsentPolicy::EmptyOut);
-            (text, report, "example")
+            merge_with_report(&target, &source, AbsentPolicy::EmptyOut)
         }
-        Fill::Snapshot { mode } if mode == "merge" && path.exists() => {
+        Fill::Snapshot { merge: true } if path.exists() => {
             let target = envfile::parse(&read_text_capped(path)?);
-            let (text, report) = merge_with_report(&target, &source, AbsentPolicy::KeepTarget);
-            (text, report, "merge")
+            merge_with_report(&target, &source, AbsentPolicy::KeepTarget)
         }
-        Fill::Snapshot { .. } => {
-            // fresh / overwrite: the snapshot's own re-serialized lines.
-            let report = MergeReport {
-                added: source.iter().map(|(k, _)| k.clone()).collect(),
-                ..MergeReport::default()
-            };
-            let mode = if path.exists() { "overwrite" } else { "fresh" };
-            (envfile::serialize_lines(&snap_lines), report, mode)
-        }
+        // A new file, or a replace: the snapshot's own re-serialized
+        // lines. Nothing is merged, so there is nothing to report beyond
+        // the entry count.
+        Fill::Snapshot { .. } => (
+            envfile::serialize_lines(&snap_lines),
+            MergeReport::default(),
+        ),
     };
     let preview = WritePreview {
         result_entry_count: envfile::entry_count(&text),
@@ -208,7 +178,6 @@ fn plan_write(path: &Path, fill: &Fill, raw: &str) -> R<(String, WritePreview)> 
         emptied: report.emptied,
         kept: report.kept,
         blocked: None,
-        mode: mode.to_string(),
     };
     Ok((text, preview))
 }
@@ -226,9 +195,9 @@ fn preview(
     project_id: &str,
     snapshot_id: &str,
     token: &str,
-    mode: Option<String>,
+    merge: bool,
 ) -> R<WritePreview> {
-    let (path, fill) = staged(state, token, mode)?;
+    let (path, fill) = staged(state, token, merge)?;
     let blocked = classify_name(&path).refusal().map(String::from);
     let raw = snapshot_raw(state, project_id, snapshot_id)?;
     let (_, preview) = plan_write(&path, &fill, &raw)?;
@@ -242,9 +211,9 @@ fn write(
     project_id: &str,
     snapshot_id: &str,
     token: &str,
-    mode: Option<String>,
+    merge: bool,
 ) -> R<String> {
-    let (path, fill) = staged(state, token, mode)?;
+    let (path, fill) = staged(state, token, merge)?;
     guard_writable_local(&path)?;
     let raw = snapshot_raw(state, project_id, snapshot_id)?;
     let (text, _) = plan_write(&path, &fill, &raw)?;
@@ -267,7 +236,7 @@ pub struct WriteTarget {
 }
 
 /// Stage `path` as the target tab's write and describe it.
-fn stage_target(state: &State<'_, AppState>, path: PathBuf) -> R<WriteTarget> {
+pub(super) fn stage_target(state: &State<'_, AppState>, path: PathBuf) -> R<WriteTarget> {
     Ok(WriteTarget {
         class: classify_name(&path).as_str().to_string(),
         exists: path.exists(),
@@ -290,12 +259,13 @@ pub struct WritePreview {
     pub kept: Vec<String>,
     /// A guard refusal, so the UI can show it without throwing.
     pub blocked: Option<String>,
-    pub mode: String,
 }
 
 /// Stage the default target: `<remembered dir>/.env.local`. The dir is
-/// the snapshot's source directory, else the project's path hint — both
-/// user-supplied, neither from the webview.
+/// the folder of the file the snapshot was captured from (recorded by
+/// the core when that file was picked or dropped), else the project
+/// folder the user typed. Either way the dialog shows the path before
+/// anything is written, and the name guard still applies.
 #[tauri::command]
 pub fn stage_write_target(
     state: State<'_, AppState>,
@@ -338,15 +308,17 @@ pub async fn pick_write_target(
     .transpose()
 }
 
+/// Preview either tab's staged write; the token's staged kind decides
+/// whether it is a target or an example scaffold.
 #[tauri::command]
 pub fn preview_write(
     state: State<'_, AppState>,
     project_id: String,
     snapshot_id: String,
     token: String,
-    mode: String,
+    merge: bool,
 ) -> R<WritePreview> {
-    preview(&state, &project_id, &snapshot_id, &token, Some(mode))
+    preview(&state, &project_id, &snapshot_id, &token, merge)
 }
 
 #[tauri::command]
@@ -355,9 +327,9 @@ pub fn write_env_local(
     project_id: String,
     snapshot_id: String,
     token: String,
-    mode: String,
+    merge: bool,
 ) -> R<String> {
-    write(&state, &project_id, &snapshot_id, &token, Some(mode))
+    write(&state, &project_id, &snapshot_id, &token, merge)
 }
 
 // --- import a .env.example as a scaffold, write .env.local beside it ---
@@ -381,15 +353,19 @@ pub async fn pick_example_file(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> R<Option<ExampleStaged>> {
-    let Some(path) = dialog_path(&app, |d| {
+    dialog_path(&app, |d| {
         d.set_title("Choose a .env.example to use as a template")
             .blocking_pick_file()
     })
     .await?
-    else {
-        return Ok(None);
-    };
-    let template = read_text_capped(&path)?;
+    .map(|path| stage_example(&state, &path))
+    .transpose()
+}
+
+/// Read the example at `path` and stage `<its dir>/.env.local` as the
+/// write it scaffolds.
+pub(super) fn stage_example(state: &State<'_, AppState>, path: &Path) -> R<ExampleStaged> {
+    let template = read_text_capped(path)?;
     let example_name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -402,33 +378,13 @@ pub async fn pick_example_file(
         .into_iter()
         .map(|(k, _)| k)
         .collect();
-    Ok(Some(ExampleStaged {
+    Ok(ExampleStaged {
         out_class: classify_name(&out_path).as_str().to_string(),
         out_path: out_path.to_string_lossy().to_string(),
-        token: stage_write(&state, out_path, Some(template))?,
+        token: stage_write(state, out_path, Some(template))?,
         example_name,
         example_keys,
-    }))
-}
-
-#[tauri::command]
-pub fn preview_example_write(
-    state: State<'_, AppState>,
-    project_id: String,
-    snapshot_id: String,
-    token: String,
-) -> R<WritePreview> {
-    preview(&state, &project_id, &snapshot_id, &token, None)
-}
-
-#[tauri::command]
-pub fn write_example_scaffold(
-    state: State<'_, AppState>,
-    project_id: String,
-    snapshot_id: String,
-    token: String,
-) -> R<String> {
-    write(&state, &project_id, &snapshot_id, &token, None)
+    })
 }
 
 #[cfg(test)]
@@ -438,18 +394,16 @@ mod tests {
 
     const RAW: &str = "# snap\nPORT=3000\nAPI_KEY=secret\n";
 
-    fn snapshot_fill(mode: &str) -> Fill {
-        Fill::Snapshot { mode: mode.into() }
-    }
+    const MERGE: Fill = Fill::Snapshot { merge: true };
+    const REPLACE: Fill = Fill::Snapshot { merge: false };
 
     #[test]
-    fn a_missing_target_is_written_fresh_even_in_merge_mode() {
+    fn a_missing_target_is_written_fresh_even_when_merging() {
         let dir = tmp_dir("plan-fresh");
         let path = dir.join(".env.local");
-        let (text, p) = plan_write(&path, &snapshot_fill("merge"), RAW).unwrap();
+        let (text, p) = plan_write(&path, &MERGE, RAW).unwrap();
         assert_eq!(text, RAW);
-        assert_eq!(p.mode, "fresh");
-        assert_eq!(p.added, ["PORT", "API_KEY"]);
+        assert!(p.added.is_empty() && p.kept.is_empty() && p.substituted.is_empty());
         assert_eq!(p.result_entry_count, 2);
         fs::remove_dir_all(dir).ok();
     }
@@ -460,20 +414,18 @@ mod tests {
         let path = dir.join(".env.local");
         fs::write(&path, "# local\nLOCAL_ONLY=keep\nPORT=old\n").unwrap();
 
-        let (text, p) = plan_write(&path, &snapshot_fill("merge"), RAW).unwrap();
+        let (text, p) = plan_write(&path, &MERGE, RAW).unwrap();
         assert_eq!(
             text,
             "# local\nLOCAL_ONLY=keep\nPORT=3000\n\n# Added by Envarsa\nAPI_KEY=secret\n"
         );
-        assert_eq!(p.mode, "merge");
         assert_eq!(p.added, ["API_KEY"]);
         assert_eq!(p.substituted, ["PORT"]);
         assert_eq!(p.kept, ["LOCAL_ONLY"]);
         assert_eq!(p.result_entry_count, 3);
 
-        let (text, p) = plan_write(&path, &snapshot_fill("overwrite"), RAW).unwrap();
+        let (text, p) = plan_write(&path, &REPLACE, RAW).unwrap();
         assert_eq!(text, RAW);
-        assert_eq!(p.mode, "overwrite");
         assert!(p.kept.is_empty() && p.substituted.is_empty());
         fs::remove_dir_all(dir).ok();
     }
@@ -489,7 +441,6 @@ mod tests {
             text,
             "# API\nAPI_KEY=secret\nUNUSED=\n\n# Added by Envarsa\nPORT=3000\n"
         );
-        assert_eq!(p.mode, "example");
         assert_eq!(p.substituted, ["API_KEY"]);
         assert_eq!(p.emptied, ["UNUSED"]);
         assert_eq!(p.added, ["PORT"]);

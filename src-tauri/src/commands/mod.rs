@@ -1,16 +1,21 @@
 //! The IPC surface. The webview can only reach these commands; every
 //! OS interaction (file dialogs, clipboard, shell reveal) stays in the
 //! Rust core. Values cross into the webview only on an explicit
-//! per-value reveal — listing a project sends keys and structure, never
-//! values. "Copy" hands a value straight from the core to the OS
-//! clipboard without it ever transiting the UI.
+//! per-value reveal, or into the editor when the user opens it —
+//! listing a project sends keys and structure, never values. "Copy"
+//! hands a value straight from the core to the OS clipboard without it
+//! ever transiting the UI. Paths only travel the other way, for
+//! display: a picked file comes back as an opaque token, and later
+//! commands take the token. ARCHITECTURE.md names these rules.
 
 pub(crate) mod export;
 pub(crate) mod library;
 pub(crate) mod secrets;
-pub(crate) mod selftest;
 pub(crate) mod session;
 pub(crate) mod transfer;
+
+#[cfg(test)]
+mod tests;
 
 use crate::envfile;
 use crate::state::AppState;
@@ -20,10 +25,6 @@ use tauri::{AppHandle, State, Wry};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 
 pub(crate) type R<T> = Result<T, String>;
-
-pub(crate) fn selftest_active() -> bool {
-    std::env::var("ENVARSA_SELFTEST").is_ok()
-}
 
 /// Read-only access to the unlocked store.
 fn with_store<T>(state: &State<'_, AppState>, f: impl FnOnce(&Store) -> R<T>) -> R<T> {

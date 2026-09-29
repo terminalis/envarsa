@@ -9,7 +9,6 @@ import { esc, errText } from './util.js';
 import {
   S, $, MODALS, mountViews, renderModal, renderPopover, closeModal, toast, boot,
 } from './app.js';
-import { runSelftest } from './selftest.js';
 import * as library from './features/library.js';
 import * as capture from './features/capture.js';
 import * as write from './features/write.js';
@@ -137,10 +136,6 @@ window.addEventListener('unhandledrejection', (e) =>
   try {
     await boot();
     api.uiLog('info', `ui ready — state=${S.status?.state}, projects=${S.projects.length}`);
-    if (await api.selftest.enabled()) {
-      api.uiLog('info', 'selftest starting');
-      await runSelftest();
-    }
   } catch (err) {
     api.uiLog('error', `boot failed: ${errText(err)}`);
     document.body.innerHTML = `<div class="gate"><div class="gate-card"><h1>Envarsa</h1><p class="form-error">Boot failed: ${esc(errText(err))}</p></div></div>`;

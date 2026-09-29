@@ -119,7 +119,7 @@ fn guard_not_live_store(state: &State<'_, AppState>, path: &Path) -> R<()> {
 
 /// Remember a picked import file and hand back the token for it. The
 /// path stays on the Rust side; the webview only ever sees the token.
-pub(crate) fn stage_import(state: &State<'_, AppState>, path: PathBuf) -> R<String> {
+pub(super) fn stage_import(state: &State<'_, AppState>, path: PathBuf) -> R<String> {
     state.with(|inner| Ok(inner.stage_import(path)))
 }
 

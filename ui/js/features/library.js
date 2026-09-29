@@ -369,10 +369,7 @@ export const forms = {
     const f = new FormData(form);
     formError(form, '');
     try {
-      const name = String(f.get('name'));
-      if (name.trim() !== S.view.name) await api.renameProject(S.selId, name);
-      const hint = String(f.get('hint'));
-      if (hint.trim() !== (S.view.pathHint || '')) await api.setPathHint(S.selId, hint);
+      await api.updateProject(S.selId, String(f.get('name')), String(f.get('hint')));
       S.modal = null;
       await refreshAfterMutation();
       toast('Project updated');

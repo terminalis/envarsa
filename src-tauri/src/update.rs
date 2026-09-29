@@ -10,7 +10,6 @@
 //! or the user has turned on the automatic check (off by default) —
 //! then at most once per 24h, shortly after launch.
 
-use crate::commands::selftest_active;
 use crate::state::{self, AppState};
 use serde::Serialize;
 use std::time::Duration;
@@ -25,6 +24,12 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 /// The release JSON is ~10-30 KB; cap reads hard anyway.
 const MAX_BODY_BYTES: u64 = 256 * 1024;
 const CHECK_INTERVAL_SECS: i64 = 24 * 60 * 60;
+
+/// The version of this build: Cargo.toml's, which is also what Tauri
+/// reports, since tauri.conf.json carries no version of its own.
+pub fn running_version() -> semver::Version {
+    semver::Version::parse(env!("CARGO_PKG_VERSION")).expect("Cargo.toml has a semver version")
+}
 
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
@@ -126,11 +131,6 @@ pub fn is_packaged() -> bool {
 /// user opted in and a check is due. Failures are silent by design —
 /// the manual button is the loud path.
 pub fn maybe_spawn_auto_check(app: AppHandle) {
-    // The selftest must stay offline and deterministic — and it reads
-    // the user's real config.json, where the toggle may be on.
-    if selftest_active() {
-        return;
-    }
     // Store builds update through the Store; the in-app check points at
     // GitHub, so it must never fire when packaged — even if a user flipped
     // the opt-in toggle (e.g. in a config carried over from a non-Store
@@ -179,7 +179,7 @@ pub fn maybe_spawn_auto_check(app: AppHandle) {
 /// Returns whether `latest` is newer.
 pub fn record_check(app: &AppHandle, latest: &semver::Version) -> bool {
     let now = chrono::Utc::now().timestamp();
-    let current = &app.package_info().version;
+    let current = &running_version();
     let newer = latest > current;
     let _ = app.state::<AppState>().with(|inner| {
         apply_check(&mut inner.config, latest, current, now);
@@ -212,9 +212,6 @@ pub struct UpdateCheckResult {
 /// legitimately postpones the next automatic one.
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheckResult, String> {
-    if selftest_active() {
-        return Err("update checks are disabled during selftest".into());
-    }
     if is_packaged() {
         return Err(
             "This is the Microsoft Store build — it updates through the Store, so the in-app check is off."
