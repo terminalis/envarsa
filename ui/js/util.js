@@ -35,3 +35,15 @@ export const debounce = (fn, ms) => {
     t = setTimeout(() => fn(...args), ms);
   };
 };
+
+// "1 entry", "3 entries".
+export const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+// IPC errors arrive as plain strings; JS errors carry a message.
+export const errText = (e) => String(e?.message || e);
+
+// Project names are one identity whatever their case or outer spaces.
+export const nameKey = (s) => String(s ?? '').trim().toLowerCase();
+
+export const findProject = (projects, name) =>
+  projects.find((p) => nameKey(p.name) === nameKey(name));
