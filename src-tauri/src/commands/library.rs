@@ -128,17 +128,7 @@ pub fn get_project(
     snapshot_id: Option<String>,
 ) -> R<ProjectView> {
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = match &snapshot_id {
-            Some(id) => project
-                .snapshot(id)
-                .ok_or_else(|| "snapshot not found".to_string())?,
-            None => project
-                .latest()
-                .ok_or_else(|| "project has no snapshots".to_string())?,
-        };
+        let (project, snapshot) = store.find(&project_id, snapshot_id.as_deref())?;
         let is_latest = project
             .latest()
             .map(|s| s.id == snapshot.id)
@@ -364,90 +354,72 @@ pub struct CaptureResult {
     pub entry_count: usize,
 }
 
-/// Resolve-or-create a project and push `snapshot` onto it, applying an
-/// optional path-hint update. Returns the project id. Shared by capture
-/// and the structured editor: by `project_id`, else by `project_name`,
-/// else a brand-new project.
-fn append_snapshot(
+/// Push `snapshot` onto a project, applying an optional path-hint
+/// update. Shared by capture and the structured editor: the project is
+/// found by `project_id`, else by `project_name`, else created under
+/// that name.
+fn add_snapshot(
     store: &mut Store,
     project_id: Option<&str>,
     project_name: Option<&str>,
-    hint: Option<String>,
+    path_hint: Option<&str>,
     snapshot: Snapshot,
-) -> R<String> {
-    if let Some(id) = project_id {
-        let p = store
-            .project_mut(id)
-            .ok_or_else(|| "project not found".to_string())?;
-        if let Some(h) = hint {
-            p.path_hint = Some(h);
-        }
-        p.snapshots.push(snapshot);
-        Ok(p.id.clone())
-    } else {
-        let name = project_name
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .ok_or_else(|| "give the project a name".to_string())?;
-        if let Some(existing) = store.project_by_name(name).map(|p| p.id.clone()) {
-            let p = store.project_mut(&existing).unwrap();
-            if let Some(h) = hint {
-                p.path_hint = Some(h);
+) -> R<CaptureResult> {
+    let project_id = match project_id {
+        Some(id) => store.find_mut(id)?.id.clone(),
+        None => {
+            let name = project_name
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| "give the project a name".to_string())?;
+            match store.project_by_name(name) {
+                Some(existing) => existing.id.clone(),
+                None => {
+                    let project = Project {
+                        id: store::new_id(),
+                        name: name.to_string(),
+                        path_hint: None,
+                        created_at: store::now_iso(),
+                        snapshots: Vec::new(),
+                    };
+                    let id = project.id.clone();
+                    store.projects.push(project);
+                    id
+                }
             }
-            p.snapshots.push(snapshot);
-            Ok(existing)
-        } else {
-            let project = Project {
-                id: store::new_id(),
-                name: name.to_string(),
-                path_hint: hint,
-                created_at: store::now_iso(),
-                snapshots: vec![snapshot],
-            };
-            let id = project.id.clone();
-            store.projects.push(project);
-            Ok(id)
         }
+    };
+    let result = CaptureResult {
+        project_id: project_id.clone(),
+        snapshot_id: snapshot.id.clone(),
+        entry_count: envfile::entry_count(&snapshot.raw),
+    };
+    let p = store.find_mut(&project_id)?;
+    if let Some(hint) = path_hint.map(str::trim).filter(|s| !s.is_empty()) {
+        p.path_hint = Some(hint.to_string());
     }
-}
-
-fn trimmed_hint(hint: Option<&str>) -> Option<String> {
-    hint.map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(String::from)
+    p.snapshots.push(snapshot);
+    Ok(result)
 }
 
 #[tauri::command]
 pub fn capture(state: State<'_, AppState>, args: CaptureArgs) -> R<CaptureResult> {
+    let via = if args.source_path.is_some() {
+        "file"
+    } else {
+        "paste"
+    };
+    let snapshot = Snapshot::new(via, args.source_path, args.text);
     mutate(&state, |store| {
-        let snapshot = Snapshot {
-            id: store::new_id(),
-            captured_at: store::now_iso(),
-            via: if args.source_path.is_some() {
-                "file".into()
-            } else {
-                "paste".into()
-            },
-            source_path: args.source_path.clone(),
-            raw: args.text.clone(),
-        };
-        let snapshot_id = snapshot.id.clone();
-        let entry_count = envfile::entry_count(&snapshot.raw);
-        let project_id = append_snapshot(
+        add_snapshot(
             store,
             args.project_id.as_deref(),
             args.project_name.as_deref(),
-            trimmed_hint(args.path_hint.as_deref()),
+            args.path_hint.as_deref(),
             snapshot,
-        )?;
-        Ok(CaptureResult {
-            project_id,
-            snapshot_id,
-            entry_count,
-        })
+        )
     })
 }
-
 // ----------------------------------------------------- structured editor
 //
 // The editor builds a draft line list in the webview, then saves it as a
@@ -508,17 +480,7 @@ pub fn edit_lines(
     snapshot_id: Option<String>,
 ) -> R<Vec<EditLine>> {
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = match &snapshot_id {
-            Some(id) => project
-                .snapshot(id)
-                .ok_or_else(|| "snapshot not found".to_string())?,
-            None => project
-                .latest()
-                .ok_or_else(|| "project has no snapshots".to_string())?,
-        };
+        let (_, snapshot) = store.find(&project_id, snapshot_id.as_deref())?;
         Ok(envfile::parse(&snapshot.raw)
             .into_iter()
             .map(|l| match l {
@@ -569,28 +531,15 @@ pub fn save_edited_snapshot(state: State<'_, AppState>, args: SaveEditArgs) -> R
     let lines: Vec<Line> = args.lines.iter().map(edit_line_to_line).collect();
     let raw = envfile::serialize_lines(&lines);
 
+    let snapshot = Snapshot::new("edit", None, raw);
     mutate(&state, |store| {
-        let snapshot = Snapshot {
-            id: store::new_id(),
-            captured_at: store::now_iso(),
-            via: "edit".into(),
-            source_path: None,
-            raw: raw.clone(),
-        };
-        let snapshot_id = snapshot.id.clone();
-        let entry_count = envfile::entry_count(&snapshot.raw);
-        let project_id = append_snapshot(
+        add_snapshot(
             store,
             args.project_id.as_deref(),
             args.project_name.as_deref(),
-            trimmed_hint(args.path_hint.as_deref()),
+            args.path_hint.as_deref(),
             snapshot,
-        )?;
-        Ok(CaptureResult {
-            project_id,
-            snapshot_id,
-            entry_count,
-        })
+        )
     })
 }
 
@@ -608,9 +557,7 @@ pub fn rename_project(state: State<'_, AppState>, project_id: String, name: Stri
                 return Err(format!("a project named \"{}\" already exists", other.name));
             }
         }
-        let p = store
-            .project_mut(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
+        let p = store.find_mut(&project_id)?;
         p.name = name.to_string();
         Ok(())
     })
@@ -619,9 +566,7 @@ pub fn rename_project(state: State<'_, AppState>, project_id: String, name: Stri
 #[tauri::command]
 pub fn set_path_hint(state: State<'_, AppState>, project_id: String, path_hint: String) -> R<()> {
     mutate(&state, |store| {
-        let p = store
-            .project_mut(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
+        let p = store.find_mut(&project_id)?;
         let trimmed = path_hint.trim();
         p.path_hint = if trimmed.is_empty() {
             None
@@ -652,21 +597,79 @@ pub fn promote_snapshot(
     snapshot_id: String,
 ) -> R<String> {
     mutate(&state, |store| {
-        let p = store
-            .project_mut(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
+        let p = store.find_mut(&project_id)?;
         let src = p
             .snapshot(&snapshot_id)
             .ok_or_else(|| "snapshot not found".to_string())?;
-        let snapshot = Snapshot {
-            id: store::new_id(),
-            captured_at: store::now_iso(),
-            via: "restore".into(),
-            source_path: src.source_path.clone(),
-            raw: src.raw.clone(),
-        };
+        let snapshot = Snapshot::new("restore", src.source_path.clone(), src.raw.clone());
         let id = snapshot.id.clone();
         p.snapshots.push(snapshot);
         Ok(id)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::store::fixtures::{project, store_of};
+
+    fn paste(raw: &str) -> Snapshot {
+        Snapshot::new("paste", None, raw.into())
+    }
+
+    #[test]
+    fn add_snapshot_finds_by_id_then_by_name() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let id = store.projects[0].id.clone();
+
+        let r = add_snapshot(&mut store, Some(&id), None, None, paste("A=2\nB=3\n")).unwrap();
+        assert_eq!(r.project_id, id);
+        assert_eq!(r.entry_count, 2);
+        assert_eq!(store.projects[0].latest().unwrap().id, r.snapshot_id);
+
+        // By name: trimmed and case-insensitive, like every name match.
+        let r = add_snapshot(&mut store, None, Some("  ALPHA "), None, paste("A=4\n")).unwrap();
+        assert_eq!(r.project_id, id);
+        assert_eq!(store.projects.len(), 1);
+        assert_eq!(store.projects[0].snapshots.len(), 3);
+    }
+
+    #[test]
+    fn add_snapshot_creates_a_project_under_a_new_name() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let r = add_snapshot(
+            &mut store,
+            None,
+            Some(" beta "),
+            Some(" /work/beta "),
+            paste("X=1\n"),
+        )
+        .unwrap();
+        let beta = store.project(&r.project_id).unwrap();
+        assert_eq!(beta.name, "beta");
+        assert_eq!(beta.path_hint.as_deref(), Some("/work/beta"));
+        assert_eq!(beta.snapshots.len(), 1);
+    }
+
+    #[test]
+    fn add_snapshot_updates_the_hint_only_when_one_is_given() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let id = store.projects[0].id.clone();
+        add_snapshot(&mut store, Some(&id), None, Some("/a"), paste("A=2\n")).unwrap();
+        add_snapshot(&mut store, Some(&id), None, None, paste("A=3\n")).unwrap();
+        add_snapshot(&mut store, Some(&id), None, Some("   "), paste("A=4\n")).unwrap();
+        assert_eq!(store.projects[0].path_hint.as_deref(), Some("/a"));
+    }
+
+    #[test]
+    fn add_snapshot_refuses_an_unknown_id_or_a_blank_name() {
+        let mut store = store_of(vec![project("alpha", "A=1\n")]);
+        let err = add_snapshot(&mut store, Some("nope"), None, None, paste("A=1\n"));
+        assert_eq!(err.err().unwrap(), "project not found");
+        let err = add_snapshot(&mut store, None, Some("  "), None, paste("A=1\n"));
+        assert_eq!(err.err().unwrap(), "give the project a name");
+        let err = add_snapshot(&mut store, None, None, None, paste("A=1\n"));
+        assert_eq!(err.err().unwrap(), "give the project a name");
+        assert_eq!(store.projects[0].snapshots.len(), 1, "nothing was pushed");
+    }
 }

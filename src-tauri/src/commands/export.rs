@@ -21,12 +21,7 @@ pub async fn export_snapshot(
     snapshot_id: String,
 ) -> R<Option<String>> {
     let (raw, suggested) = with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (project, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         Ok((snapshot.raw.clone(), format!("{}.env", project.name)))
     })?;
 
@@ -68,12 +63,7 @@ pub fn export_to_path(
         return Err("export_to_path is a selftest-only command".into());
     }
     with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (_, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         fs::write(&path, snapshot.raw.as_bytes()).map_err(|e| e.to_string())
     })
 }
@@ -208,13 +198,7 @@ fn clear_pending_write(state: &State<'_, AppState>) {
 }
 
 fn snapshot_raw(store: &Store, project_id: &str, snapshot_id: &str) -> R<String> {
-    let project = store
-        .project(project_id)
-        .ok_or_else(|| "project not found".to_string())?;
-    let snapshot = project
-        .snapshot(snapshot_id)
-        .ok_or_else(|| "snapshot not found".to_string())?;
-    Ok(snapshot.raw.clone())
+    Ok(store.find(project_id, Some(snapshot_id))?.1.raw.clone())
 }
 
 /// Read a `.env.local` to merge into. Missing → empty (nothing to keep).
@@ -306,12 +290,7 @@ pub fn stage_write_target(
     snapshot_id: String,
 ) -> R<WriteTarget> {
     let dir = with_store(&state, |store| {
-        let project = store
-            .project(&project_id)
-            .ok_or_else(|| "project not found".to_string())?;
-        let snapshot = project
-            .snapshot(&snapshot_id)
-            .ok_or_else(|| "snapshot not found".to_string())?;
+        let (project, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
         let from_source = snapshot
             .source_path
             .as_deref()
