@@ -12,8 +12,7 @@
 //! In a portable build `config.json` lives beside the exe too, so the
 //! whole library — preferences included — travels as one folder.
 
-use crate::crypto;
-use crate::store::{self, Project, Snapshot, Store};
+use crate::store::{self, Opened, Snapshot, Store};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,8 +20,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 /// User preferences, persisted as `config.json` in the app config dir.
-/// Regenerable (unlike the store), so reads are forgiving and writes
-/// are plain. Saved as a whole struct — a partial write here once
+/// Regenerable (unlike the store), so reads are forgiving. Saved
+/// atomically, as a whole struct — a partial write here once
 /// clobbered settings that other code paths had set.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Config {
@@ -84,12 +83,10 @@ pub fn load_config(config_path: &Path) -> Config {
 }
 
 pub fn save_config(config_path: &Path, config: &Config) -> Result<(), String> {
-    if let Some(dir) = config_path.parent() {
-        fs::create_dir_all(dir).map_err(|e| format!("could not create config dir: {e}"))?;
-    }
     let body = serde_json::to_string_pretty(config)
         .map_err(|e| format!("could not encode config: {e}"))?;
-    fs::write(config_path, body).map_err(|e| format!("could not write config: {e}"))
+    store::write_atomic(config_path, body.as_bytes())
+        .map_err(|e| format!("could not write config: {e}"))
 }
 
 pub enum Session {
@@ -102,6 +99,27 @@ pub enum Session {
     Corrupt {
         error: String,
     },
+}
+
+impl Session {
+    /// The store, or why there isn't one to use.
+    #[allow(dead_code)] // Not yet called from commands.rs.
+    pub fn unlocked(&self) -> Result<&Store, String> {
+        match self {
+            Session::Unlocked { store, .. } => Ok(store),
+            Session::Locked => Err("the store is locked".into()),
+            Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
+        }
+    }
+
+    /// The store and its passphrase, for changing either.
+    pub fn unlocked_mut(&mut self) -> Result<(&mut Store, &mut Option<String>), String> {
+        match self {
+            Session::Unlocked { store, passphrase } => Ok((store, passphrase)),
+            Session::Locked => Err("the store is locked".into()),
+            Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
+        }
+    }
 }
 
 /// A store file the user picked for import. The dialog command mints
@@ -176,6 +194,20 @@ impl Inner {
 #[derive(Default)]
 pub struct AppState(pub Mutex<Option<Inner>>);
 
+impl AppState {
+    /// Run `f` with the app state locked.
+    pub fn with<T>(&self, f: impl FnOnce(&mut Inner) -> Result<T, String>) -> Result<T, String> {
+        let mut guard = self
+            .0
+            .lock()
+            .map_err(|_| "internal: state poisoned".to_string())?;
+        let inner = guard
+            .as_mut()
+            .ok_or_else(|| "app is still starting".to_string())?;
+        f(inner)
+    }
+}
+
 pub fn resolve_store_path(app: &tauri::AppHandle, config: &Config) -> (PathBuf, bool) {
     let default = match portable_base() {
         Some(base) => base.join("envarsa.store"),
@@ -234,20 +266,33 @@ pub fn init_session(store_path: &Path) -> Session {
         Err(e) => Session::Corrupt {
             error: format!("could not read store file: {e}"),
         },
-        Ok(bytes) => {
-            if crypto::is_encrypted(&bytes) {
-                Session::Locked
-            } else {
-                match store::parse_store(&bytes) {
-                    Ok(s) => Session::Unlocked {
-                        store: s,
-                        passphrase: None,
-                    },
-                    Err(error) => Session::Corrupt { error },
-                }
-            }
-        }
+        Ok(bytes) => match store::open(&bytes, None) {
+            Ok(Opened::Plain(s)) => Session::Unlocked {
+                store: s,
+                passphrase: None,
+            },
+            Ok(Opened::NeedsPassphrase | Opened::Encrypted(_)) => Session::Locked,
+            Err(error) => Session::Corrupt { error },
+        },
     }
+}
+
+/// The sample library ENVARSA_DEMO seeds, stored as an ordinary store
+/// file. Ids and timestamps are minted fresh on each load.
+fn demo_projects() -> Vec<store::Project> {
+    let demo = store::parse_store(include_str!("../demo.json").as_bytes())
+        .expect("demo.json is a valid store");
+    demo.projects
+        .into_iter()
+        .map(|mut p| {
+            p.id = store::new_id();
+            p.created_at = store::now_iso();
+            for s in &mut p.snapshots {
+                *s = Snapshot::new(&s.via, s.source_path.take(), std::mem::take(&mut s.raw));
+            }
+            p
+        })
+        .collect()
 }
 
 /// When ENVARSA_DEMO is set and the store is empty, seed a few sample
@@ -257,68 +302,13 @@ pub fn maybe_seed_demo(session: &mut Session, store_path: &Path) {
     if std::env::var("ENVARSA_DEMO").is_err() {
         return;
     }
-    let Session::Unlocked { store, passphrase } = session else {
+    let Ok((store, passphrase)) = session.unlocked_mut() else {
         return;
     };
     if !store.projects.is_empty() {
         return;
     }
-
-    let mut add = |name: &str, hint: &str, raws: &[(&str, &str)]| {
-        let snapshots = raws
-            .iter()
-            .map(|(via, raw)| Snapshot {
-                id: store::new_id(),
-                captured_at: store::now_iso(),
-                via: via.to_string(),
-                source_path: if *via == "file" {
-                    Some(format!("{hint}\\.env"))
-                } else {
-                    None
-                },
-                raw: raw.to_string(),
-            })
-            .collect();
-        store.projects.push(Project {
-            id: store::new_id(),
-            name: name.to_string(),
-            path_hint: Some(hint.to_string()),
-            created_at: store::now_iso(),
-            snapshots,
-        });
-    };
-
-    add(
-        "lumen-api",
-        "C:\\dev\\lumen\\api",
-        &[
-            (
-                "file",
-                "# Server\nPORT=3000\nLOG_LEVEL=info\n\n# Database\nDATABASE_URL=postgres://lumen:s3cr3t@localhost:5432/lumen_dev\nREDIS_URL=redis://localhost:6379/0\n",
-            ),
-            (
-                "file",
-                "# Server\nPORT=3000\nLOG_LEVEL=debug\n\n# Database\nDATABASE_URL=postgres://lumen:s3cr3t@localhost:5432/lumen_dev\nREDIS_URL=redis://localhost:6379/0\n\n# Auth\nJWT_SECRET=9f1c4f5a2e6b48d3a7c0e9b1d8f24a61\nSESSION_TTL_HOURS=72\n\n# Stripe (test mode)\nSTRIPE_SECRET_KEY=sk_test_demo-not-a-real-key\nSTRIPE_WEBHOOK_SECRET=whsec_8a2f0d9c1b3e4f5a6d7c8b9a0e1f2d3c\n\n# Observability\nSENTRY_DSN=https://e1f2a3b4c5d6@o447951.ingest.sentry.io/5901247\n",
-            ),
-        ],
-    );
-    add(
-        "lumen-web",
-        "C:\\dev\\lumen\\web",
-        &[(
-            "file",
-            "VITE_API_URL=http://localhost:3000\nVITE_STRIPE_PUBLISHABLE_KEY=pk_test_TYooMQauvdEDq54NiTphI7jx\nLOG_LEVEL=warn\nSENTRY_DSN=https://e1f2a3b4c5d6@o447951.ingest.sentry.io/5901247\n",
-        )],
-    );
-    add(
-        "tooling-scripts",
-        "C:\\dev\\tooling",
-        &[(
-            "paste",
-            "# Personal automation\nGITHUB_TOKEN=ghp_demo-not-a-real-token\nOPENAI_API_KEY=sk-proj-demo-not-a-real-key-000000000000\nDATABASE_URL=postgres://tools:tools@localhost:5432/scratch\n",
-        )],
-    );
-
+    store.projects = demo_projects();
     let pass = passphrase.clone();
     let _ = store::save(store, store_path, pass.as_deref());
 }
@@ -326,12 +316,7 @@ pub fn maybe_seed_demo(session: &mut Session, store_path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn tmp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("envarsa-test-{name}-{}", store::new_id()));
-        fs::create_dir_all(&dir).unwrap();
-        dir
-    }
+    use crate::store::fixtures::{project, store_of, tmp_dir};
 
     #[test]
     fn missing_or_corrupt_config_means_defaults() {
@@ -441,6 +426,95 @@ mod tests {
         fs::write(dir.join(PORTABLE_MARKER), b"").unwrap();
         assert!(has_portable_marker(&dir), "marker beside exe → portable");
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn save_config_creates_the_folder_and_leaves_no_temp_file() {
+        let dir = tmp_dir("cfg-atomic");
+        let path = dir.join("nested").join("config.json");
+        let c = Config {
+            auto_update_check: true,
+            ..Config::default()
+        };
+        save_config(&path, &c).unwrap();
+        assert!(load_config(&path).auto_update_check);
+        assert!(!dir.join("nested").join("config.json.tmp").exists());
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn session_access_maps_locked_and_corrupt_to_errors() {
+        let mut s = Session::Unlocked {
+            store: store_of(vec![project("alpha", "A=1\n")]),
+            passphrase: None,
+        };
+        assert_eq!(s.unlocked().unwrap().projects.len(), 1);
+        *s.unlocked_mut().unwrap().1 = Some("pass-phrase".into());
+        assert!(matches!(
+            &s,
+            Session::Unlocked {
+                passphrase: Some(_),
+                ..
+            }
+        ));
+
+        let mut locked = Session::Locked;
+        assert_eq!(locked.unlocked().err().unwrap(), "the store is locked");
+        assert!(locked.unlocked_mut().is_err());
+        let corrupt = Session::Corrupt {
+            error: "bad json".into(),
+        };
+        assert_eq!(
+            corrupt.unlocked().err().unwrap(),
+            "the store could not be loaded: bad json"
+        );
+    }
+
+    #[test]
+    fn app_state_with_reports_a_missing_inner() {
+        let state = AppState::default();
+        let err = state.with(|_| Ok(())).unwrap_err();
+        assert_eq!(err, "app is still starting");
+        *state.0.lock().unwrap() = Some(inner());
+        assert!(state.with(|i| Ok(i.env_override)).is_ok_and(|o| !o));
+    }
+
+    #[test]
+    fn init_session_creates_opens_and_locks() {
+        let dir = tmp_dir("init");
+        let path = dir.join("envarsa.store");
+        assert!(matches!(init_session(&path), Session::Unlocked { .. }));
+        assert!(path.exists(), "first run writes a store at once");
+
+        let mut s = store_of(vec![project("alpha", "A=1\n")]);
+        store::save(&mut s, &path, Some("hunter2hunter2")).unwrap();
+        assert!(matches!(init_session(&path), Session::Locked));
+
+        fs::write(&path, "{ not json").unwrap();
+        assert!(matches!(init_session(&path), Session::Corrupt { .. }));
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn demo_seed_matches_the_sample_library() {
+        let projects = demo_projects();
+        let names: Vec<&str> = projects.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, ["lumen-api", "lumen-web", "tooling-scripts"]);
+        let api = &projects[0];
+        assert_eq!(api.path_hint.as_deref(), Some("C:\\dev\\lumen\\api"));
+        assert_eq!(api.snapshots.len(), 2);
+        assert_eq!(
+            api.snapshots[1].source_path.as_deref(),
+            Some("C:\\dev\\lumen\\api\\.env")
+        );
+        assert!(api.snapshots[1].raw.contains("JWT_SECRET="));
+        assert_eq!(projects[2].snapshots[0].via, "paste");
+        assert_eq!(projects[2].snapshots[0].source_path, None);
+        assert_ne!(
+            demo_projects()[0].id,
+            api.id,
+            "each seeding mints fresh ids"
+        );
     }
 
     fn inner() -> Inner {
