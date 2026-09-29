@@ -48,7 +48,7 @@ export const api = {
 
   updateProject: (projectId, name, pathHint) => invoke('update_project', { projectId, name, pathHint }),
   deleteProject: (projectId) => invoke('delete_project', { projectId }),
-  promoteSnapshot: (projectId, snapshotId) => invoke('promote_snapshot', { projectId, snapshotId }),
+  restoreSnapshot: (projectId, snapshotId) => invoke('restore_snapshot', { projectId, snapshotId }),
 
   enableEncryption: (passphrase) => invoke('enable_encryption', { passphrase }),
   changePassphrase: (current, newPassphrase) => invoke('change_passphrase', { current, newPassphrase }),

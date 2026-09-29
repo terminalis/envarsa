@@ -9,6 +9,8 @@
 //! It runs in exactly two cases: the user clicks "Check for updates",
 //! or the user has turned on the automatic check (off by default) —
 //! then at most once per 24h, shortly after launch.
+//!
+//! Invariant: ONE-EGRESS (ARCHITECTURE.md).
 
 use crate::state::{self, AppState};
 use serde::Serialize;
@@ -52,7 +54,7 @@ fn agent() -> ureq::Agent {
 }
 
 /// Blocking; callers run it on a worker thread.
-pub fn fetch_latest_version() -> Result<semver::Version, String> {
+fn fetch_latest_version() -> Result<semver::Version, String> {
     let mut resp = agent()
         .get(LATEST_RELEASE_API)
         .header("Accept", "application/vnd.github+json")
@@ -177,7 +179,7 @@ pub fn maybe_spawn_auto_check(app: AppHandle) {
 /// `latest` only while it is newer than the running version, and persist
 /// both. Best effort — a config-write failure must not eat a good answer.
 /// Returns whether `latest` is newer.
-pub fn record_check(app: &AppHandle, latest: &semver::Version) -> bool {
+fn record_check(app: &AppHandle, latest: &semver::Version) -> bool {
     let now = chrono::Utc::now().timestamp();
     let current = &running_version();
     let newer = latest > current;

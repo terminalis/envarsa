@@ -1,10 +1,8 @@
-use crate::commands::R;
-
 /// The Windows clipboard is exclusive, and listeners (clipboard
 /// history, sync services, managers) grab it the moment it changes.
 /// Retrying with backoff for up to ~2s beats surfacing an error for
 /// what is almost always a sub-second collision.
-pub(crate) fn clipboard_retry<T>(what: &str, mut op: impl FnMut() -> Result<T, String>) -> R<T> {
+fn clipboard_retry<T>(what: &str, mut op: impl FnMut() -> Result<T, String>) -> Result<T, String> {
     let mut last = String::new();
     for attempt in 0..8 {
         if attempt > 0 {
@@ -22,7 +20,7 @@ pub(crate) fn clipboard_retry<T>(what: &str, mut op: impl FnMut() -> Result<T, S
 /// the clipboard history (Win+V) and the cross-device cloud clipboard —
 /// both would silently retain (or upload) anything copied here long
 /// after the paste.
-pub(crate) fn write_clipboard(text: String) -> R<()> {
+fn write_clipboard(text: String) -> Result<(), String> {
     clipboard_retry("write to", || {
         let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
         let set = cb.set();
@@ -47,7 +45,9 @@ static CLIPBOARD_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::A
 /// Copy a secret: write it, then clear it after CLIPBOARD_TTL — but
 /// only if no newer copy was made and the clipboard still holds exactly
 /// what was copied, so nothing of anyone else's is ever clobbered.
-pub(crate) fn copy_secret_to_clipboard(text: String) -> R<()> {
+///
+/// Invariant: CLIPBOARD-CLEARS (ARCHITECTURE.md).
+pub(crate) fn copy_secret_to_clipboard(text: String) -> Result<(), String> {
     use std::sync::atomic::Ordering;
     write_clipboard(text.clone())?;
     let generation = CLIPBOARD_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;

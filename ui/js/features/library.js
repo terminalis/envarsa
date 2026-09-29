@@ -164,7 +164,7 @@ export function sheetView(S) {
 <div class="banner-old">
   <span>Viewing history — snapshot from <strong>${esc(fullTime(v.capturedAt))}</strong>.</span>
   <span class="spacer"></span>
-  <button class="btn btn-sm" data-act="promote-snapshot">Bring this back as latest</button>
+  <button class="btn btn-sm" data-act="restore-snapshot">Bring this back as latest</button>
   <button class="btn btn-sm btn-ghost" data-act="back-to-latest">Back to latest</button>
 </div>`
     : '';
@@ -173,7 +173,7 @@ export function sheetView(S) {
 <header class="sheet-head">
   <div class="title-row">
     <h1 class="sheet-title" title="${esc(v.name)}">${esc(v.name)}</h1>
-    <button class="icon-btn" data-act="open-edit" title="Rename / edit filepath">${ICONS.pencil}</button>
+    <button class="icon-btn" data-act="open-edit" title="Rename / edit project folder">${ICONS.pencil}</button>
     <span class="spacer"></span>
     <button class="btn" data-act="recapture" title="Capture a fresh snapshot to replace this one — the current snapshot stays in history"><span class="btn-ic">${ICONS.refresh}</span>Re-capture</button>
     <button class="btn" data-act="copy-block" title="Copy this snapshot to the clipboard, exactly as captured — cleared after 30s"><span class="btn-ic">${ICONS.copy}</span>Copy block</button>
@@ -183,7 +183,7 @@ export function sheetView(S) {
     <button class="icon-btn danger" data-act="open-delete" title="Delete project from the library">${ICONS.trash}</button>
   </div>
   <div class="sub-row">
-    ${v.pathHint ? `<span class="path mono" title="Filepath — a note, never a binding; the project's identity is its name">${esc(v.pathHint)}</span><span class="dot">·</span>` : ''}
+    ${v.pathHint ? `<span class="path mono" title="Project folder — a note, never a binding; the project's identity is its name">${esc(v.pathHint)}</span><span class="dot">·</span>` : ''}
     <span title="${esc(fullTime(v.capturedAt))}">captured ${esc(timeAgo(v.capturedAt))} via ${esc(v.via)}</span>
     <span class="dot">·</span>
     <span>${plural(v.entryCount, 'entry', 'entries')}</span>
@@ -328,8 +328,8 @@ export const actions = {
     renderPopover();
   },
 
-  'promote-snapshot': run(async () => {
-    await api.promoteSnapshot(S.view.id, S.view.snapshotId);
+  'restore-snapshot': run(async () => {
+    await api.restoreSnapshot(S.view.id, S.view.snapshotId);
     await refreshAfterMutation();
     toast('Snapshot restored as latest');
   }),

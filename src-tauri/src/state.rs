@@ -125,9 +125,11 @@ impl Session {
 /// The picker mints the token and keeps the path here, on the Rust side;
 /// later commands accept only the token, so the webview never supplies a
 /// path.
+///
+/// Invariant: PATHS-STAY-IN-CORE (ARCHITECTURE.md).
 pub struct PendingFile {
-    pub token: String,
-    pub path: PathBuf,
+    token: String,
+    path: PathBuf,
 }
 
 impl PendingFile {
@@ -155,7 +157,7 @@ impl PendingFile {
 /// `template`, when set, is an imported `.env.example`'s text used as the
 /// scaffold for the merge; the example file itself is only ever read.
 pub struct PendingWrite {
-    pub token: String,
+    token: String,
     pub path: PathBuf,
     pub template: Option<String>,
 }

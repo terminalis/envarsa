@@ -108,7 +108,7 @@ const COMMANDS = {
   save_edited_snapshot: () => CAPTURED,
   update_project: () => {},
   delete_project: () => {},
-  promote_snapshot: () => 's-latest',
+  restore_snapshot: () => 's-latest',
   enable_encryption: ({ passphrase }) => {
     if (passphrase.length < 8) raise('use at least 8 characters');
     S.encrypted = true;

@@ -6,7 +6,8 @@
 //! hands a value straight from the core to the OS clipboard without it
 //! ever transiting the UI. Paths only travel the other way, for
 //! display: a picked file comes back as an opaque token, and later
-//! commands take the token. ARCHITECTURE.md names these rules.
+//! commands take the token. These are PATHS-STAY-IN-CORE and
+//! VALUES-ON-REVEAL in ARCHITECTURE.md.
 
 pub(crate) mod export;
 pub(crate) mod library;
@@ -33,6 +34,8 @@ fn with_store<T>(state: &State<'_, AppState>, f: impl FnOnce(&Store) -> R<T>) ->
 
 /// Mutate a copy of the unlocked store, persist it durably, and only
 /// then make it live — memory never gets ahead of disk.
+///
+/// Invariant: MEMORY-FOLLOWS-DISK (ARCHITECTURE.md).
 fn mutate<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Store) -> R<T>) -> R<T> {
     state.with(|inner| {
         let path = inner.store_path.clone();

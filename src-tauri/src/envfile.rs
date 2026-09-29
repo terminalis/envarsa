@@ -149,7 +149,7 @@ pub fn entry_count(raw: &str) -> usize {
 /// Re-serialize a value to the shortest token that `parse_value` maps
 /// back to exactly `v`. Only the parsed value is stored (the raw token
 /// is lost), so writing a value back out has to reconstruct its quoting.
-pub fn format_value(v: &str) -> String {
+fn format_value(v: &str) -> String {
     if v.is_empty() {
         return String::new();
     }
@@ -203,7 +203,7 @@ fn unquoted_is_safe(v: &str) -> bool {
 }
 
 /// One line, without the trailing newline.
-pub fn serialize_line(line: &Line) -> String {
+fn serialize_line(line: &Line) -> String {
     match line {
         Line::Blank => String::new(),
         Line::Comment { text } => text.clone(),
