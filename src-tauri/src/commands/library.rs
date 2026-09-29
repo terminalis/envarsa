@@ -1,4 +1,4 @@
-use super::{latest_effective, mutate, with_inner, with_store, R};
+use super::{latest_effective, mutate, with_store, R};
 use crate::envfile::{self, Line};
 use crate::state::{AppState, Session};
 use crate::store::{self, Project, Snapshot, Store};
@@ -329,10 +329,9 @@ pub async fn pick_env_file(app: AppHandle) -> R<Option<PickedFile>> {
 /// to call.
 pub fn handle_drop(window: &tauri::Window, paths: &[PathBuf]) {
     let state = window.state::<AppState>();
-    let unlocked = with_inner(&state, |inner| {
-        Ok(matches!(inner.session, Session::Unlocked { .. }))
-    })
-    .unwrap_or(false);
+    let unlocked = state
+        .with(|inner| Ok(matches!(inner.session, Session::Unlocked { .. })))
+        .unwrap_or(false);
     if !unlocked {
         return;
     }

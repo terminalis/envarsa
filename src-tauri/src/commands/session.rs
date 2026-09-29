@@ -1,7 +1,6 @@
-use super::{with_inner, R};
-use crate::crypto;
+use super::R;
 use crate::state::{self, AppState, Inner, Session};
-use crate::store;
+use crate::store::{self, Opened};
 use serde::Serialize;
 use std::fs;
 use tauri::{AppHandle, State};
@@ -77,37 +76,29 @@ fn status_of(app: &AppHandle, inner: &Inner) -> StatusPayload {
 
 #[tauri::command]
 pub fn store_status(app: AppHandle, state: State<'_, AppState>) -> R<StatusPayload> {
-    with_inner(&state, |inner| Ok(status_of(&app, inner)))
+    state.with(|inner| Ok(status_of(&app, inner)))
 }
 
 #[tauri::command]
 pub fn unlock(state: State<'_, AppState>, passphrase: String) -> R<()> {
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         let bytes =
             fs::read(&inner.store_path).map_err(|e| format!("could not read store file: {e}"))?;
-        if crypto::is_encrypted(&bytes) {
-            let plain = crypto::decrypt(&bytes, &passphrase)?;
-            let s = store::parse_store(&plain)?;
-            inner.session = Session::Unlocked {
-                store: s,
-                passphrase: Some(passphrase),
-            };
-        } else {
-            // The file is plaintext after all (e.g. encryption was
-            // disabled elsewhere) — just load it.
-            let s = store::parse_store(&bytes)?;
-            inner.session = Session::Unlocked {
-                store: s,
-                passphrase: None,
-            };
-        }
+        // A plaintext file loads as is (e.g. encryption was disabled
+        // elsewhere); the passphrase is kept only for an encrypted one.
+        let (store, passphrase) = match store::open(&bytes, Some(&passphrase))? {
+            Opened::Encrypted(s) => (s, Some(passphrase)),
+            Opened::Plain(s) => (s, None),
+            Opened::NeedsPassphrase => return Err("enter the passphrase".into()),
+        };
+        inner.session = Session::Unlocked { store, passphrase };
         Ok(())
     })
 }
 
 #[tauri::command]
 pub fn lock(state: State<'_, AppState>) -> R<()> {
-    with_inner(&state, |inner| match &inner.session {
+    state.with(|inner| match &inner.session {
         Session::Unlocked {
             passphrase: Some(_),
             ..
@@ -127,7 +118,7 @@ pub fn enable_encryption(state: State<'_, AppState>, passphrase: String) -> R<()
     if passphrase.chars().count() < 8 {
         return Err("use at least 8 characters".into());
     }
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         let path = inner.store_path.clone();
         match &mut inner.session {
             Session::Unlocked {
@@ -163,7 +154,7 @@ pub fn change_passphrase(
     if new_passphrase.chars().count() < 8 {
         return Err("use at least 8 characters".into());
     }
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         let path = inner.store_path.clone();
         match &mut inner.session {
             Session::Unlocked {
@@ -192,7 +183,7 @@ pub fn change_passphrase(
 
 #[tauri::command]
 pub fn disable_encryption(state: State<'_, AppState>, passphrase: String) -> R<()> {
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         let path = inner.store_path.clone();
         match &mut inner.session {
             Session::Unlocked {
@@ -225,7 +216,7 @@ pub fn disable_encryption(state: State<'_, AppState>, passphrase: String) -> R<(
 /// holds.
 #[tauri::command]
 pub fn restore_backup(app: AppHandle, state: State<'_, AppState>) -> R<StatusPayload> {
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         if !matches!(inner.session, Session::Corrupt { .. }) {
             return Err(
                 "the store loaded fine — restoring the backup is only for when it cannot be read"

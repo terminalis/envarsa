@@ -1,4 +1,4 @@
-use super::{selftest_active, with_inner, R};
+use super::{selftest_active, R};
 use crate::state::{self, AppState};
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -35,7 +35,7 @@ pub async fn check_for_updates(app: AppHandle, state: State<'_, AppState>) -> R<
     let newer = latest > current;
     // Best effort: a config-write failure must not eat a good answer.
     // A manual check legitimately postpones the next automatic one.
-    let _ = with_inner(&state, |inner| {
+    let _ = state.with(|inner| {
         inner.config.last_update_check = Some(chrono::Utc::now().timestamp());
         inner.config.available_version = newer.then(|| latest.to_string());
         let _ = state::save_config(&inner.config_path, &inner.config);
@@ -50,7 +50,7 @@ pub async fn check_for_updates(app: AppHandle, state: State<'_, AppState>) -> R<
 
 #[tauri::command]
 pub fn set_auto_update_check(state: State<'_, AppState>, enabled: bool) -> R<()> {
-    with_inner(&state, |inner| {
+    state.with(|inner| {
         inner.config.auto_update_check = enabled;
         // This save failure does surface — the UI reverts the toggle.
         state::save_config(&inner.config_path, &inner.config)

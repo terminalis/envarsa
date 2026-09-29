@@ -1,4 +1,4 @@
-use super::{selftest_active, with_inner, with_store, R};
+use super::{selftest_active, with_store, R};
 use crate::crypto;
 use crate::envfile::{self, Line};
 use crate::state::AppState;
@@ -188,11 +188,11 @@ pub(crate) fn stage_write(
     path: PathBuf,
     template: Option<String>,
 ) -> R<String> {
-    with_inner(state, |inner| Ok(inner.stage_write(path, template)))
+    state.with(|inner| Ok(inner.stage_write(path, template)))
 }
 
 fn pending_write(state: &State<'_, AppState>, token: &str) -> R<(PathBuf, Option<String>)> {
-    with_inner(state, |inner| {
+    state.with(|inner| {
         inner
             .pending_write(token)
             .map(|p| (p.path.clone(), p.template.clone()))
@@ -201,7 +201,7 @@ fn pending_write(state: &State<'_, AppState>, token: &str) -> R<(PathBuf, Option
 }
 
 fn clear_pending_write(state: &State<'_, AppState>) {
-    let _ = with_inner(state, |inner| {
+    let _ = state.with(|inner| {
         inner.clear_pending_writes();
         Ok(())
     });

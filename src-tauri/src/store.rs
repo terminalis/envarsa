@@ -160,7 +160,6 @@ pub fn parse_store(bytes: &[u8]) -> Result<Store, String> {
 /// A store file's bytes, opened as far as the passphrase allows.
 pub enum Opened {
     Plain(Store),
-    #[allow(dead_code)] // Not yet read by commands.rs.
     Encrypted(Store),
     /// Encrypted, and no passphrase was given.
     NeedsPassphrase,

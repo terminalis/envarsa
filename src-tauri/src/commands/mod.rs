@@ -14,7 +14,7 @@ pub(crate) mod transfer;
 pub(crate) mod updates;
 
 use crate::envfile;
-use crate::state::{AppState, Inner, Session};
+use crate::state::AppState;
 use crate::store::{self, Project, Store};
 use tauri::State;
 
@@ -24,51 +24,23 @@ fn selftest_active() -> bool {
     std::env::var("ENVARSA_SELFTEST").is_ok()
 }
 
-fn with_inner<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Inner) -> R<T>) -> R<T> {
-    let mut guard = state
-        .0
-        .lock()
-        .map_err(|_| "internal: state poisoned".to_string())?;
-    let inner = guard
-        .as_mut()
-        .ok_or_else(|| "app is still starting".to_string())?;
-    f(inner)
-}
-
 /// Read-only access to the unlocked store.
 fn with_store<T>(state: &State<'_, AppState>, f: impl FnOnce(&Store) -> R<T>) -> R<T> {
-    with_inner(state, |inner| match &inner.session {
-        Session::Unlocked { store, .. } => f(store),
-        Session::Locked => Err("the store is locked".into()),
-        Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
-    })
+    state.with(|inner| f(inner.session.unlocked()?))
 }
 
-/// Mutate the unlocked store, then persist it durably. The mutation is
-/// only kept if the save succeeds.
+/// Mutate a copy of the unlocked store, persist it durably, and only
+/// then make it live — memory never gets ahead of disk.
 fn mutate<T>(state: &State<'_, AppState>, f: impl FnOnce(&mut Store) -> R<T>) -> R<T> {
-    with_inner(state, |inner| {
+    state.with(|inner| {
         let path = inner.store_path.clone();
-        match &mut inner.session {
-            Session::Unlocked { store, passphrase } => {
-                let before = store.clone();
-                match f(store) {
-                    Ok(out) => match store::save(store, &path, passphrase.as_deref()) {
-                        Ok(()) => Ok(out),
-                        Err(e) => {
-                            *store = before; // roll back the in-memory state
-                            Err(format!("could not save the store: {e}"))
-                        }
-                    },
-                    Err(e) => {
-                        *store = before;
-                        Err(e)
-                    }
-                }
-            }
-            Session::Locked => Err("the store is locked".into()),
-            Session::Corrupt { error } => Err(format!("the store could not be loaded: {error}")),
-        }
+        let (store, passphrase) = inner.session.unlocked_mut()?;
+        let mut next = store.clone();
+        let out = f(&mut next)?;
+        store::save(&mut next, &path, passphrase.as_deref())
+            .map_err(|e| format!("could not save the store: {e}"))?;
+        *store = next;
+        Ok(out)
     })
 }
 

@@ -40,16 +40,13 @@ fn main() {
             let (store_path, env_override) = state::resolve_store_path(app.handle(), &config);
             let mut session = state::init_session(&store_path);
             state::maybe_seed_demo(&mut session, &store_path);
-            *app.state::<AppState>().0.lock().unwrap() = Some(state::Inner {
+            *app.state::<AppState>().0.lock().unwrap() = Some(state::Inner::new(
                 store_path,
                 config_path,
                 config,
                 env_override,
                 session,
-                pending_import: None,
-                pending_target: None,
-                pending_example: None,
-            });
+            ));
             // No-op unless the user opted in (Settings → About).
             update::maybe_spawn_auto_check(app.handle().clone());
             #[cfg(windows)]
