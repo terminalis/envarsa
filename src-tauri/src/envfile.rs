@@ -242,13 +242,9 @@ pub struct MergeReport {
 /// keep the target's comments, blanks, ordering, and each entry's
 /// `export`/casing; substitute values for keys the source has; apply
 /// `absent` to target keys the source lacks; then append source-only
-/// keys (source order) under one attribution comment.
-pub fn merge(target_lines: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
-    merge_with_report(target_lines, source, absent).0
-}
-
-/// `merge`, plus the report of what it did — from the same pass, so a
-/// preview built from the report can't disagree with the bytes written.
+/// keys (source order) under one attribution comment. Returns the text
+/// and the report of what it did — from the same pass, so a preview
+/// built from the report can't disagree with the bytes written.
 pub fn merge_with_report(
     target_lines: &[Line],
     source: &[(String, String)],
@@ -327,6 +323,10 @@ pub fn merge_with_report(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn merge(target: &[Line], source: &[(String, String)], absent: AbsentPolicy) -> String {
+        merge_with_report(target, source, absent).0
+    }
 
     fn entry(lines: &[Line], idx: usize) -> (&str, &str, bool) {
         match &lines[idx] {
@@ -523,7 +523,10 @@ mod tests {
         ];
 
         let (text, r) = merge_with_report(&target, &source, AbsentPolicy::KeepTarget);
-        assert_eq!(text, merge(&target, &source, AbsentPolicy::KeepTarget));
+        assert_eq!(
+            text,
+            "# t\nA=1\nB=new\nexport C=3\nB=new\n\n# Added by Envarsa\nD=d\nE=e\n"
+        );
         assert_eq!(
             r,
             MergeReport {

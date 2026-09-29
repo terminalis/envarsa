@@ -16,7 +16,7 @@ pub(crate) mod updates;
 use crate::envfile;
 use crate::state::AppState;
 use crate::store::{self, Project, Store};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State, Wry};
 use tauri_plugin_dialog::{DialogExt, FileDialogBuilder, FilePath};
 
@@ -62,6 +62,17 @@ async fn dialog_path(
                 .map_err(|e| format!("unsupported file location: {e}"))
         })
         .transpose()
+}
+
+/// Read a user-picked text file (an .env, an example, a merge target),
+/// lossily as UTF-8, refusing anything over 2 MB.
+fn read_text_capped(path: &Path) -> R<String> {
+    let bytes =
+        std::fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    if bytes.len() > 2_000_000 {
+        return Err("that file is larger than 2 MB — too big for an .env file".into());
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn latest_effective(project: &Project) -> Vec<(String, String)> {

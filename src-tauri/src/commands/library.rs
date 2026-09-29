@@ -1,9 +1,8 @@
-use super::{dialog_path, latest_effective, mutate, with_store, R};
+use super::{dialog_path, latest_effective, mutate, read_text_capped, with_store, R};
 use crate::envfile::{self, Line};
 use crate::state::{AppState, Session};
 use crate::store::{self, Project, Snapshot, Store};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -269,11 +268,7 @@ pub struct PickedFile {
 }
 
 fn read_env_file(path: &Path) -> R<PickedFile> {
-    let bytes = fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
-    if bytes.len() > 2_000_000 {
-        return Err("that file is larger than 2 MB — not an .env file?".into());
-    }
-    let text = String::from_utf8_lossy(&bytes).to_string();
+    let text = read_text_capped(path)?;
     let dir = path.parent().map(|p| p.to_string_lossy().to_string());
     // A .env usually lives in the project root, so the parent folder
     // name is a good default project name.
