@@ -474,6 +474,36 @@ export async function runSelftest() {
     assert(read.includes('# Added by Envarsa') && read.includes('REGION=eu-west-1'), 'source-only keys appended');
   });
 
+  await step('write .env.local: the target and example tabs stage independently', async () => {
+    // The write modal's two tabs each stage a write; picking on one tab
+    // must not invalidate the other tab's token, in either order.
+    const scaffoldPath = `${storeDir}${sep}scaffold${sep}.env.local`;
+    const template = '# tpl\nPORT=1\n';
+
+    const target = await api.selftest.stageWrite(ENV_LOCAL());
+    const example = await api.selftest.stageExample(scaffoldPath, template);
+    const tp = await api.previewWrite(writeProj.projectId, writeProj.snapshotId, target, 'overwrite');
+    assertEq(tp.blocked, null, 'target still staged after an example was picked');
+    const ep = await api.previewExampleWrite(writeProj.projectId, writeProj.snapshotId, example);
+    assertEq(ep.blocked, null, 'example staged alongside the target');
+    await api.writeEnvLocal(writeProj.projectId, writeProj.snapshotId, target, 'overwrite');
+    assertEq(await api.selftest.readFile(ENV_LOCAL()), WRITE_RAW, 'target written');
+
+    const example2 = await api.selftest.stageExample(scaffoldPath, template);
+    const target2 = await api.selftest.stageWrite(ENV_LOCAL());
+    await api.writeExampleScaffold(writeProj.projectId, writeProj.snapshotId, example2);
+    const read = await api.selftest.readFile(scaffoldPath);
+    assert(read.startsWith('# tpl\nPORT=3000\n'), `example written after a target was picked, got: ${read}`);
+
+    let threw = false;
+    try {
+      await api.writeEnvLocal(writeProj.projectId, writeProj.snapshotId, target2, 'overwrite');
+    } catch (e) {
+      threw = String(e).includes('no longer staged');
+    }
+    assert(threw, 'a finished write clears the other staged write');
+  });
+
   await step('write .env.local: example and non-local targets are refused', async () => {
     for (const name of ['.env.example', '.env.local.bak', 'notes.txt']) {
       const token = await api.selftest.stageWrite(`${storeDir}${sep}${name}`);

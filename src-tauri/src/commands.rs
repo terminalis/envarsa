@@ -949,28 +949,21 @@ fn stage_write(
     path: PathBuf,
     template: Option<String>,
 ) -> R<String> {
-    let token = store::new_id();
-    with_inner(state, |inner| {
-        inner.pending_write = Some(state::PendingWrite {
-            token: token.clone(),
-            path,
-            template,
-        });
-        Ok(())
-    })?;
-    Ok(token)
+    with_inner(state, |inner| Ok(inner.stage_write(path, template)))
 }
 
 fn pending_write(state: &State<'_, AppState>, token: &str) -> R<(PathBuf, Option<String>)> {
-    with_inner(state, |inner| match &inner.pending_write {
-        Some(p) if p.token == token => Ok((p.path.clone(), p.template.clone())),
-        _ => Err("that write is no longer staged — choose the location again".into()),
+    with_inner(state, |inner| {
+        inner
+            .pending_write(token)
+            .map(|p| (p.path.clone(), p.template.clone()))
+            .ok_or_else(|| "that write is no longer staged — choose the location again".into())
     })
 }
 
 fn clear_pending_write(state: &State<'_, AppState>) {
     let _ = with_inner(state, |inner| {
-        inner.pending_write = None;
+        inner.clear_pending_writes();
         Ok(())
     });
 }

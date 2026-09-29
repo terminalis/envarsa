@@ -46,7 +46,8 @@ fn main() {
                 env_override,
                 session,
                 pending_import: None,
-                pending_write: None,
+                pending_target: None,
+                pending_example: None,
             });
             // No-op unless the user opted in (Settings → About).
             update::maybe_spawn_auto_check(app.handle().clone());

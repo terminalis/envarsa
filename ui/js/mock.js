@@ -64,8 +64,9 @@ const serializeLine = (l) =>
   : `${l.exported ? 'export ' : ''}${l.key}=${formatValue(l.value)}`;
 const serializeLines = (lines) => lines.map((l) => serializeLine(l) + '\n').join('');
 
-// At most one .env.local write is staged at a time (mirrors pending_write).
-let writeStage = null;
+// One staged .env.local write per write-modal tab (mirrors pending_target
+// and pending_example in state.rs).
+const staged = { target: null, example: null };
 
 // --- fixture store ---------------------------------------------------
 const FIX = (name, hint, raws) => ({
@@ -238,14 +239,14 @@ const COMMANDS = {
     const s = snapshotId ? snap(p, snapshotId) : latest(p);
     const dir = (s.sourcePath ? s.sourcePath.replace(/[\\/][^\\/]+$/, '') : p.pathHint) || 'C:\\dev\\project';
     const path = `${dir}\\.env.local`;
-    writeStage = { token: 'mock-write-token', path, template: null };
-    return { token: writeStage.token, path, dir, class: 'writable', exists: false };
+    staged.target = { token: 'mock-write-token', path };
+    return { token: staged.target.token, path, dir, class: 'writable', exists: false };
   },
   pick_write_target: ({ suggestedDir }) => {
     const dir = suggestedDir || 'C:\\dev\\project';
     const path = `${dir}\\.env.local`;
-    writeStage = { token: 'mock-write-token', path, template: null };
-    return { token: writeStage.token, path, dir, class: 'writable', exists: false };
+    staged.target = { token: 'mock-write-token', path };
+    return { token: staged.target.token, path, dir, class: 'writable', exists: false };
   },
   preview_write: ({ projectId, snapshotId }) => {
     const p = proj(projectId);
@@ -253,14 +254,14 @@ const COMMANDS = {
     const source = [...effective(parseEnv(s.raw)).keys()];
     return { resultEntryCount: source.length, added: source, substituted: [], emptied: [], kept: [], blocked: null, mode: 'fresh' };
   },
-  write_env_local: () => (writeStage?.path || 'C:\\dev\\project\\.env.local'),
+  write_env_local: () => (staged.target?.path || 'C:\\dev\\project\\.env.local'),
   pick_example_file: () => {
     const dir = 'C:\\dev\\project';
-    writeStage = { token: 'mock-example-token', path: `${dir}\\.env.local`, template: '# API\nAPI_KEY=your-key-here\nPORT=3000\n' };
+    staged.example = { token: 'mock-example-token', path: `${dir}\\.env.local`, template: '# API\nAPI_KEY=your-key-here\nPORT=3000\n' };
     return {
-      token: writeStage.token,
+      token: staged.example.token,
       exampleName: '.env.example',
-      outPath: writeStage.path,
+      outPath: staged.example.path,
       outClass: 'writable',
       outExists: false,
       exampleKeys: ['API_KEY', 'PORT'],
@@ -271,13 +272,13 @@ const COMMANDS = {
     const p = proj(projectId);
     const s = snapshotId ? snap(p, snapshotId) : latest(p);
     const source = effective(parseEnv(s.raw));
-    const tplKeys = [...effective(parseEnv(writeStage?.template || '')).keys()];
+    const tplKeys = [...effective(parseEnv(staged.example?.template || '')).keys()];
     const substituted = tplKeys.filter((k) => source.has(k));
     const emptied = tplKeys.filter((k) => !source.has(k));
     const added = [...source.keys()].filter((k) => !tplKeys.includes(k));
     return { resultEntryCount: tplKeys.length + added.length, added, substituted, emptied, kept: [], blocked: null, mode: 'example' };
   },
-  write_example_scaffold: () => (writeStage?.path || 'C:\\dev\\project\\.env.local'),
+  write_example_scaffold: () => (staged.example?.path || 'C:\\dev\\project\\.env.local'),
 
   // --- structured editor ---
   edit_lines: ({ projectId, snapshotId }) => {
