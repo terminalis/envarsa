@@ -5,7 +5,7 @@ import { esc, errText } from '../util.js';
 import { ICONS, brandMark, modalShell } from '../kit.js';
 import {
   S, $, run, toast, renderModal, openModal, closeModal, focusNext, formError, boot, refreshStatus,
-} from '../main.js';
+} from '../app.js';
 
 // ------------------------------------------------------------------ gate
 

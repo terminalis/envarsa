@@ -6,7 +6,7 @@ import { esc, timeAgo, plural, nameKey, findProject, errText } from '../util.js'
 import { modalShell } from '../kit.js';
 import {
   S, $, run, busy, toast, openModal, renderModal, focusNext, formError, refreshAfterMutation,
-} from '../main.js';
+} from '../app.js';
 
 // The name a row brings into the library, or '' when it brings none.
 function finalName(p, d) {

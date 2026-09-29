@@ -5,7 +5,7 @@ import { esc, debounce, plural, findProject } from '../util.js';
 import { modalShell, folderField, projectNames } from '../kit.js';
 import {
   S, $, run, busy, toast, openModal, renderModal, focusNext, loadProjects, selectProject,
-} from '../main.js';
+} from '../app.js';
 
 function openCaptureModal(fields) {
   const m = {
