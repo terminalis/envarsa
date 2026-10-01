@@ -1,0 +1,71 @@
+<!doctype html>
+<!--
+  Source of website/brand/og-image.png (1200x630). Render it from the repo root
+  in Git Bash with headless Edge:
+
+  "/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe" --headless --disable-gpu \
+    --hide-scrollbars --force-device-scale-factor=1 --window-size=1200,630 \
+    --screenshot="$(pwd -W)/website/brand/og-image.png" "file:///$(pwd -W)/tools/og-image.html"
+
+  Fonts are the system stacks the site uses, so render on Windows.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Envarsa Open Graph card</title>
+<style>
+  :root {
+    --bg: #0f1116; --bg-rail: #13151b; --panel: #171a21; --border: #262b36; --border-soft: #1f242e;
+    --text: #e8eaf0; --muted: #8b93a7; --faint: #5c6478; --accent: #e5b35a; --mask: #6b7388;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: var(--bg); }
+  body {
+    color: var(--text); font-family: var(--display); -webkit-font-smoothing: antialiased;
+    background: radial-gradient(ellipse 70% 55% at 30% 0%, rgba(229, 179, 90, 0.09), transparent), var(--bg);
+  }
+  .card {
+    position: absolute; inset: 32px; border: 1px solid var(--border-soft); border-radius: 24px;
+    padding: 64px 68px; display: grid; grid-template-columns: 1fr 400px; gap: 56px; align-items: center;
+  }
+  .brand { display: flex; align-items: center; gap: 16px; font-size: 34px; font-weight: 600; margin-bottom: 34px; }
+  .brand img { width: 64px; height: 64px; }
+  h1 { font-size: 64px; line-height: 1.04; letter-spacing: -1.8px; font-weight: 700; margin: 0 0 26px; }
+  h1 .accent { color: var(--accent); }
+  .sub { font-size: 24px; color: var(--muted); margin: 0; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 22px; font-family: var(--mono); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+  .panel .hd { color: var(--faint); font-size: 15px; padding-bottom: 12px; border-bottom: 1px solid var(--border-soft); }
+  .kr { display: flex; align-items: center; gap: 10px; padding: 15px 0; border-bottom: 1px solid var(--border-soft); }
+  .kr:last-child { border-bottom: none; padding-bottom: 4px; }
+  .k { font-size: 19px; font-weight: 700; color: var(--text); }
+  .badge {
+    font-size: 14px; color: var(--accent); border: 1px solid rgba(229, 179, 90, 0.45);
+    border-radius: 99px; padding: 1px 9px;
+  }
+  .dots { margin-left: auto; color: var(--mask); letter-spacing: 3px; font-size: 18px; }
+  .url { position: absolute; right: 68px; bottom: 44px; font-family: var(--mono); font-size: 22px; color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div>
+      <div class="brand"><img src="../website/brand/mark.svg" alt="">Envarsa</div>
+      <h1>One place for all your <span class="accent">.env</span> files</h1>
+      <p class="sub">Free and open source · Windows and Linux</p>
+    </div>
+    <div class="panel">
+      <div class="hd">lumen-api</div>
+      <div class="kr"><span class="k">PORT</span><span class="dots">••••••</span></div>
+      <div class="kr"><span class="k">DATABASE_URL</span><span class="badge">⧉ 1</span><span class="dots">••••••</span></div>
+      <div class="kr"><span class="k">JWT_SECRET</span><span class="dots">••••••</span></div>
+      <div class="kr"><span class="k">STRIPE_KEY</span><span class="dots">••••••</span></div>
+    </div>
+    <div class="url">envarsa.dev</div>
+  </div>
+</body>
+</html>
