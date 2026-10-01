@@ -24,6 +24,10 @@ pub struct StatusPayload {
     pub store_path: String,
     pub encrypted: bool,
     pub env_override: bool,
+    /// True when the store lives where an earlier version moved it (and
+    /// the env var doesn't override that). The UI offers to move it to
+    /// the default location then.
+    pub custom_location: bool,
     pub backup_exists: bool,
     pub project_count: Option<usize>,
     pub error: Option<String>,
@@ -57,6 +61,12 @@ fn status_of(inner: &Inner) -> StatusPayload {
         store_path: inner.store_path.to_string_lossy().to_string(),
         encrypted,
         env_override: inner.env_override,
+        custom_location: !inner.env_override
+            && inner
+                .config
+                .store_path
+                .as_deref()
+                .is_some_and(|p| !p.trim().is_empty()),
         backup_exists: store::backup_path(&inner.store_path).exists(),
         project_count,
         error,

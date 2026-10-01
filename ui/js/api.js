@@ -55,7 +55,7 @@ export const api = {
   disableEncryption: (passphrase) => invoke('disable_encryption', { passphrase }),
 
   revealStore: () => invoke('reveal_store'),
-  relocateStore: () => invoke('relocate_store'),
+  moveStoreToDefault: () => invoke('move_store_to_default'),
   exportStore: (passphrase = null) => invoke('export_store', { passphrase }),
   // The picker returns an opaque token; inspect/apply present it back.
   // No path ever travels webview → core.

@@ -157,6 +157,7 @@ fn a_fresh_store_is_unlocked_and_empty() {
     assert_eq!(st["appVersion"], env!("CARGO_PKG_VERSION"));
     // A test build has no package identity.
     assert_eq!(st["packaged"], false);
+    assert_eq!(st["customLocation"], false);
 }
 
 #[test]
@@ -572,6 +573,86 @@ fn import_replace_takes_the_incoming_version_and_skip_changes_nothing() {
     assert_eq!(apply("skip").skipped, 1);
     assert_eq!(env.projects().len(), 1);
     assert_eq!(env.project("alpha")["snapshotCount"], 3);
+}
+
+// ------------------------------------------------------- store location
+
+/// Treat the env's store as one an earlier version moved elsewhere, and
+/// return where the default location would be.
+fn at_custom_location(env: &Env) -> PathBuf {
+    let custom = env.store_path().to_string_lossy().to_string();
+    let set = env.state().with(|inner| {
+        inner.config.store_path = Some(custom);
+        state::save_config(&inner.config_path, &inner.config)
+    });
+    set.unwrap();
+    env.path("data").join("envarsa.store")
+}
+
+fn move_to(env: &Env, default: PathBuf) -> Result<String, String> {
+    env.state()
+        .with(|inner| transfer::move_to_default(inner, default))
+}
+
+#[test]
+fn a_custom_location_moves_to_the_default_and_leaves_the_old_file() {
+    let env = Env::new("cmd-move");
+    env.capture("alpha", ALPHA);
+    let default = at_custom_location(&env);
+    assert_eq!(env.status()["customLocation"], true);
+    let before = fs::read(env.store_path()).unwrap();
+
+    let old = move_to(&env, default.clone()).unwrap();
+    assert_eq!(old, env.store_path().to_string_lossy().as_ref());
+    let st = env.status();
+    assert_eq!(st["storePath"], default.to_string_lossy().as_ref());
+    assert_eq!(st["customLocation"], false);
+    assert_eq!(st["projectCount"], 1, "the session carries on");
+    assert_eq!(fs::read(&default).unwrap(), before, "a byte-for-byte copy");
+    let config = state::load_config(&env.path("config.json"));
+    assert!(
+        config.store_path.is_none(),
+        "the config no longer points away"
+    );
+
+    // The old file stays, and later saves go to the copy only.
+    env.capture("beta", BETA);
+    assert_eq!(fs::read(env.store_path()).unwrap(), before);
+    let moved = store::parse_store(&fs::read(&default).unwrap()).unwrap();
+    assert_eq!(moved.projects.len(), 2);
+}
+
+#[test]
+fn moving_the_store_is_refused_under_the_env_var() {
+    let env = Env::new("cmd-move-env");
+    let default = at_custom_location(&env);
+    let forced = env.state().with(|inner| {
+        inner.env_override = true;
+        Ok(())
+    });
+    forced.unwrap();
+    assert_eq!(env.status()["customLocation"], false);
+
+    let err = move_to(&env, default.clone()).refused();
+    assert!(err.contains("ENVARSA_STORE_PATH"), "{err}");
+    assert!(!default.exists());
+    assert_eq!(
+        env.status()["storePath"],
+        env.store_path().to_string_lossy().as_ref()
+    );
+}
+
+#[test]
+fn moving_the_store_never_overwrites_a_file_at_the_default() {
+    let env = Env::new("cmd-move-occupied");
+    let default = at_custom_location(&env);
+    fs::create_dir_all(default.parent().unwrap()).unwrap();
+    fs::write(&default, b"a stale library").unwrap();
+
+    let err = move_to(&env, default.clone()).refused();
+    assert!(err.contains("already exists"), "{err}");
+    assert_eq!(fs::read(&default).unwrap(), b"a stale library");
+    assert_eq!(env.status()["customLocation"], true, "nothing switched");
 }
 
 // ------------------------------------------------------ write .env.local

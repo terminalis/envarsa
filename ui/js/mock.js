@@ -64,7 +64,7 @@ const COMMANDS = {
   store_status: () => ({
     state: S.locked ? 'locked' : 'unlocked',
     storePath: 'C:\\Users\\you\\AppData\\Roaming\\com.envarsa.app\\envarsa.store',
-    encrypted: S.encrypted, envOverride: false, backupExists: true,
+    encrypted: S.encrypted, envOverride: false, customLocation: false, backupExists: true,
     projectCount: PROJECTS.length, error: null, appVersion: '0.1.0-mock',
     updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, packaged: false,
   }),
@@ -116,7 +116,7 @@ const COMMANDS = {
   change_passphrase: () => {},
   disable_encryption: () => { S.encrypted = false; },
   reveal_store: () => {},
-  relocate_store: () => 'D:\\sync\\envarsa.store',
+  move_store_to_default: () => 'D:\\sync\\envarsa.store',
   export_store: () => 'C:\\Users\\you\\Desktop\\envarsa.store',
   pick_import_store: () => 'mock-import',
   // The fixture import is encrypted with the passphrase "demo".

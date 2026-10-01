@@ -105,6 +105,9 @@ function protectionSection(st) {
 </form>`;
 }
 
+// Windows calls its file manager Explorer; elsewhere it varies.
+const REVEAL_LABEL = /Windows/.test(navigator.userAgent) ? 'Show in Explorer' : 'Show in folder';
+
 function settingsModal(S, m) {
   const st = S.status;
   return modalShell({ cls: 'settings', label: 'Settings' }, `
@@ -113,10 +116,12 @@ function settingsModal(S, m) {
       <h3>Store file</h3>
       <p class="mono settings-path" title="${esc(st.storePath)}">${esc(st.storePath)}</p>
       ${st.envOverride ? '<p class="hint warn">Location forced by <span class="mono">ENVARSA_STORE_PATH</span> for this run.</p>' : ''}
-      <p class="muted">One portable file holds everything${st.backupExists ? ' — a one-step <span class="mono">.bak</span> sits next to it' : ''}. Portability is manual and yours: export a copy to carry over (optionally encrypted for the trip), import another store's projects into this one, or keep the file in a folder you sync yourself.</p>
+      ${st.customLocation ? `
+      <p class="hint">This library lives at a location chosen in an earlier version.</p>
+      <div class="settings-actions"><button class="btn" data-act="move-store-to-default">Move to default location</button></div>` : ''}
+      <p class="muted">One portable file holds everything${st.backupExists ? ' — a one-step <span class="mono">.bak</span> sits next to it' : ''}. Portability is manual and yours: export a copy to carry over (optionally encrypted for the trip), or import another store's projects into this one.</p>
       <div class="settings-actions">
-        <button class="btn" data-act="reveal-store"><span class="btn-ic">${ICONS.folder}</span>Show in Explorer</button>
-        <button class="btn" data-act="relocate-store" title="Pick a new home for the store file — Envarsa moves it there and keeps using it from then on">Change location…</button>
+        <button class="btn" data-act="reveal-store"><span class="btn-ic">${ICONS.folder}</span>${REVEAL_LABEL}</button>
         <button class="btn" data-act="open-export-store"><span class="btn-ic">${ICONS.download}</span>Export…</button>
         <button class="btn" data-act="open-import-store">Import…</button>
       </div>
@@ -213,11 +218,10 @@ export const actions = {
   },
   'open-releases': run(async () => api.openReleasesPage()),
   'reveal-store': run(async () => api.revealStore()),
-  'relocate-store': run(async () => {
-    const path = await api.relocateStore();
-    if (!path) return;
+  'move-store-to-default': run(async () => {
+    const old = await api.moveStoreToDefault();
     await refreshStatus(); // the settings dialog re-renders with the new path
-    toast('Store moved', 'success', path);
+    toast('Store moved to the default location — the old copy was left here:', 'success', old);
   }),
   'open-export-store': () =>
     // Default to encrypting the copy when the store itself is encrypted.

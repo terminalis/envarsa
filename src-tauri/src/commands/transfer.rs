@@ -1,6 +1,6 @@
 use super::{dialog_path, latest_effective, mutate, with_store, R};
 use crate::crypto;
-use crate::state::{self, AppState};
+use crate::state::{self, AppState, Inner};
 use crate::store::{self, Opened, Store};
 use serde::Serialize;
 use std::fs;
@@ -19,44 +19,65 @@ pub fn reveal_store(app: AppHandle, state: State<'_, AppState>) -> R<()> {
     })
 }
 
-/// Move the store file somewhere the user chooses (e.g. a folder they
-/// sync themselves). Manual, user-owned portability.
+/// Bring a store that an earlier version moved elsewhere back to the
+/// default location. Returns the old path, for display.
 #[tauri::command]
-pub async fn relocate_store(app: AppHandle, state: State<'_, AppState>) -> R<Option<String>> {
-    let (old_path, env_override) =
-        state.with(|inner| Ok((inner.store_path.clone(), inner.env_override)))?;
-    if env_override {
+pub fn move_store_to_default(app: AppHandle, state: State<'_, AppState>) -> R<String> {
+    let default = state::default_store_path(&app);
+    state.with(|inner| move_to_default(inner, default))
+}
+
+/// The move, factored out so it can be tested without a Tauri app. The
+/// store's bytes are copied as they are, so the in-memory session stays
+/// valid. The old file and its `.bak` stay where they are: deleting
+/// them inside a sync folder would delete them on every synced machine.
+///
+/// Invariant: ATOMIC-WRITES (ARCHITECTURE.md), via `store::write_atomic`.
+pub(super) fn move_to_default(inner: &mut Inner, default: PathBuf) -> R<String> {
+    if inner.env_override {
         return Err(
             "the store location is currently forced by ENVARSA_STORE_PATH — unset it first".into(),
         );
     }
-
-    let Some(new_path) = dialog_path(&app, |d| {
-        d.set_title("Move the store file")
-            .set_file_name("envarsa.store")
-            .blocking_save_file()
-    })
-    .await?
-    else {
-        return Ok(None);
-    };
-    if new_path == old_path {
-        return Ok(Some(new_path.to_string_lossy().to_string()));
+    // Earlier versions removed the old file only on a best-effort basis,
+    // so a stale library can still sit at the default location.
+    if default.exists() {
+        return Err(format!(
+            "a store file already exists at {} — import it, or move it aside, first",
+            default.display()
+        ));
     }
 
-    state.with(|inner| {
-        if let Some(dir) = new_path.parent() {
-            fs::create_dir_all(dir).map_err(|e| format!("could not create folder: {e}"))?;
-        }
-        fs::copy(&old_path, &new_path).map_err(|e| format!("could not copy the store: {e}"))?;
-        inner.config.store_path = Some(new_path.to_string_lossy().to_string());
-        state::save_config(&inner.config_path, &inner.config)?;
-        inner.store_path = new_path.clone();
-        // Best effort: tidy up the old location.
-        let _ = fs::remove_file(&old_path);
-        let _ = fs::remove_file(store::backup_path(&old_path));
-        Ok(Some(new_path.to_string_lossy().to_string()))
-    })
+    let bytes =
+        fs::read(&inner.store_path).map_err(|e| format!("could not read the store: {e}"))?;
+    store::write_atomic(&default, &bytes)?;
+    if let Err(e) = check_copy(&default, &bytes) {
+        // Nothing was at the default location before, so the copy can go.
+        let _ = fs::remove_file(&default);
+        return Err(e);
+    }
+
+    let mut config = inner.config.clone();
+    config.store_path = None;
+    if let Err(e) = state::save_config(&inner.config_path, &config) {
+        let _ = fs::remove_file(&default);
+        return Err(e);
+    }
+    inner.config = config;
+    let old = std::mem::replace(&mut inner.store_path, default);
+    Ok(old.to_string_lossy().to_string())
+}
+
+/// Read the copy back: it must hold exactly `bytes` and open as a store.
+/// An encrypted store opens as NeedsPassphrase, which is fine here.
+fn check_copy(path: &Path, bytes: &[u8]) -> R<()> {
+    let copy = fs::read(path).map_err(|e| format!("could not read the copy back: {e}"))?;
+    if copy != bytes {
+        return Err("the copy does not match the store — the store was not moved".into());
+    }
+    store::open(&copy, None)
+        .map(|_| ())
+        .map_err(|e| format!("the copy could not be opened — the store was not moved: {e}"))
 }
 
 // ------------------------------------------------------- store import

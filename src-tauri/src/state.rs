@@ -2,7 +2,8 @@
 //!
 //! Store path resolution order:
 //!   1. `ENVARSA_STORE_PATH` env var (power users, tests)
-//!   2. `store_path` in the app config file (set via Settings)
+//!   2. `store_path` in the app config file (set through Settings by
+//!      earlier versions; Settings now only offers to move the store back)
 //!   3. the default location, `<app data dir>/envarsa.store`.
 
 use crate::store::{self, Opened, Snapshot, Store};
@@ -136,9 +137,9 @@ pub struct Inner {
     pub store_path: PathBuf,
     pub config_path: PathBuf,
     pub config: Config,
-    /// True when ENVARSA_STORE_PATH is in effect — relocating the store
-    /// through Settings is refused then, because the env var would win
-    /// again on the next start.
+    /// True when ENVARSA_STORE_PATH is in effect — moving the store to
+    /// the default location is refused then, because the env var would
+    /// win again on the next start.
     pub env_override: bool,
     pub session: Session,
     /// At most one import is in flight; a new pick replaces it.
@@ -241,23 +242,28 @@ impl AppState {
     }
 }
 
-pub fn resolve_store_path(app: &tauri::AppHandle, config: &Config) -> (PathBuf, bool) {
-    let default = app
-        .path()
+/// Where the store lives unless something overrides it:
+/// `<app data dir>/envarsa.store`.
+pub fn default_store_path(app: &tauri::AppHandle) -> PathBuf {
+    app.path()
         .app_data_dir()
         .expect("app data dir resolves")
-        .join("envarsa.store");
+        .join("envarsa.store")
+}
+
+pub fn resolve_store_path(app: &tauri::AppHandle, config: &Config) -> (PathBuf, bool) {
     resolve_store_path_with(
         std::env::var("ENVARSA_STORE_PATH").ok(),
         config.store_path.as_deref(),
-        default,
+        default_store_path(app),
     )
 }
 
 /// The precedence, factored out so it can be tested without a Tauri app:
-/// the `ENVARSA_STORE_PATH` env var (which also locks relocation), then the
-/// Settings-chosen path, then the default the caller computed. Blank values
-/// are treated as unset and fall through.
+/// the `ENVARSA_STORE_PATH` env var (which also locks moving the store),
+/// then the path an earlier version's Settings chose, then the default
+/// the caller computed. Blank values are treated as unset and fall
+/// through.
 fn resolve_store_path_with(
     env_path: Option<String>,
     config_path: Option<&str>,
