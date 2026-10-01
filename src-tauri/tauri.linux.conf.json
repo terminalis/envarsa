@@ -1,4 +1,8 @@
 {
+  "identifier": "dev.envarsa.Envarsa",
+  "app": {
+    "enableGTKAppId": true
+  },
   "bundle": {
     "active": false
   }

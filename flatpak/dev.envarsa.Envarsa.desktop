@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Envarsa
+Comment=A local library for your .env files
+Exec=envarsa
+Icon=dev.envarsa.Envarsa
+Terminal=false
+Categories=Development;Utility;
+Keywords=env;dotenv;secrets;environment;variables;
+StartupNotify=true

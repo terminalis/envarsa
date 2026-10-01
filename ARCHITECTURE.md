@@ -72,6 +72,7 @@ flowchart LR
 | `.github/actions/setup-windows-gnu/` | The Windows toolchain setup and `WebView2Loader.dll` staging, shared by `ci.yml` and `release.yml`. |
 | `.github/workflows/release.yml` | Tagged releases: the Windows installer and MSIX, plus the engine tests on Linux. |
 | `tools/package-msix.ps1`, `Package.appxmanifest`, `Assets/` | Microsoft Store packaging. |
+| `flatpak/`, `tools/flatpak-cargo-sources.sh` | The Flatpak: its manifest, desktop file and metainfo, and the script that lists every crate in `Cargo.lock` as a source for the offline build. On Linux the app identifier is `dev.envarsa.Envarsa` (`tauri.linux.conf.json`); Windows keeps `com.envarsa.app`. `flatpak/README.md` covers building, linting and Flathub. |
 | `website/` | envarsa.dev, published by `pages.yml`. |
 
 ## From the webview to disk
