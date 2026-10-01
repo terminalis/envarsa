@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
-<title>Envarsa — local-first .env manager for Windows &amp; Linux · no cloud, no telemetry</title>
-<meta name="description" content="One local home for your .env files: capture snapshots, recall values masked, hand them back by copy or export. Free, open-source app for Windows and Linux. No cloud, no telemetry, optional age encryption.">
+<title>Envarsa: one place for all your .env files (Windows and Linux)</title>
+<meta name="description" content="Keep a copy of every project's .env file on your computer, see which projects share a key, and set up fresh checkouts. Free, open source, nothing uploaded.">
 <link rel="canonical" href="https://envarsa.dev/">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0f1116">
@@ -16,18 +16,19 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Envarsa">
 <meta property="og:url" content="https://envarsa.dev/">
-<meta property="og:title" content="Envarsa — a local-first .env manager for Windows and Linux">
-<meta property="og:description" content="Capture a project's .env as a point-in-time snapshot, recall it with values masked, hand values back by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check, off by default — no egress.">
+<meta property="og:title" content="Envarsa: one place for all your .env files">
+<meta property="og:description" content="Keep a copy of each project's .env file on your computer, see which projects share a key, and set up a fresh checkout from its .env.example. Free and open source, for Windows and Linux. Nothing is uploaded.">
 <meta property="og:image" content="https://envarsa.dev/brand/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Envarsa brand card: the logo mark and wordmark beside the tagline 'a local-first library for your environment variables', with a masked .env store panel and the line 'no cloud, no telemetry, no egress by default'.">
+<meta property="og:image:alt" content="Envarsa card: the app icon and the line 'One place for all your .env files', beside a panel of masked keys, one marked as shared with another project.">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Envarsa — a local-first .env manager for Windows and Linux">
-<meta name="twitter:description" content="Capture .env snapshots, recall them masked, hand values back when you need them. Free, open source, Windows &amp; Linux. No cloud, no telemetry, no egress by default.">
+<meta name="twitter:title" content="Envarsa: one place for all your .env files">
+<meta name="twitter:description" content="Keep a copy of each project's .env file on your computer, see which projects share a key, and set up a fresh checkout from its .env.example. Free and open source, for Windows and Linux.">
 <meta name="twitter:image" content="https://envarsa.dev/brand/og-image.png">
+<meta name="twitter:image:alt" content="Envarsa card: the app icon and the line 'One place for all your .env files', beside a panel of masked keys, one marked as shared with another project.">
 
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png">
@@ -44,26 +45,23 @@
   "url": "https://envarsa.dev/",
   "downloadUrl": "https://github.com/terminalis/envarsa/releases/latest",
   "license": "https://github.com/terminalis/envarsa/blob/main/LICENSE",
-  "description": "A local-first library for your environment variables. Capture a project's .env as a point-in-time snapshot, recall and inspect it with values masked, and hand values back out — by clipboard or export. No cloud, no telemetry, and — apart from an opt-in update check against GitHub, off by default — no egress.",
+  "description": "Envarsa keeps a copy of each project's .env file on your computer. You can find a value months later, see which projects share a key, and write a working .env.local for a fresh checkout. Nothing is uploaded anywhere.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "author": { "@type": "Person", "name": "terminalis", "url": "https://github.com/terminalis" },
   "screenshot": [
     "https://envarsa.dev/screenshots/demo.png",
-    "https://envarsa.dev/screenshots/screenshot-02.png",
-    "https://envarsa.dev/screenshots/screenshot-03.png"
+    "https://envarsa.dev/screenshots/feature-history.png",
+    "https://envarsa.dev/screenshots/feature-shared.png",
+    "https://envarsa.dev/screenshots/feature-write.png"
   ],
   "featureList": [
-    "Capture .env files as point-in-time snapshots (file picker, paste, or drag and drop)",
-    "Structural masking: keys always visible, values hidden until revealed one at a time",
-    "Per-value clipboard copy that bypasses the screen and clears itself after 30 seconds",
-    "Byte-identical .env export",
-    "Guarded write-back to a .env*.local you choose (merge or fresh), or scaffolded from a .env.example — never a committed example file",
-    "Build or edit a project by hand in a structured editor, with or without an .env file",
-    "Snapshot history per project",
-    "Cross-project key reuse detection — flagged, never linked",
-    "One portable plaintext JSON store file with atomic saves and a one-step backup",
-    "Optional passphrase encryption at rest in standard age format",
-    "No cloud, no telemetry — no network egress beyond an opt-in update check (off by default)"
+    "Keeps a copy of each project's .env file, with every earlier version",
+    "Shows which projects share a key, and whether the values match",
+    "Writes a .env.local from a project's .env.example, with a preview first",
+    "Uploads nothing; the only network request is an optional update check, off by default",
+    "Hides values on screen until you choose to show one",
+    "Clears copied values from the clipboard after 30 seconds",
+    "Stores the library as one JSON file, with optional passphrase encryption in age format"
   ]
 }
 </script>
@@ -74,43 +72,23 @@
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "Does Envarsa send my values anywhere?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. Your values live in one file on your disk and never leave unless you export them yourself. The single deliberate exception to no-egress is the opt-in update check, off by default: one GET to api.github.com for the latest release tag. It transmits no values, nothing downloads or installs itself, and it is the app's entire network surface." }
+      "name": "Does Envarsa change files in my projects?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Only when you ask it to write a .env.local, and only after showing you the file's path and a preview. It can merge values into an existing file or replace it. It never writes to example files (.env.example, .sample, .template, .dist) and never sets environment variables for running programs." }
     },
     {
       "@type": "Question",
-      "name": "Is the store encrypted?",
-      "acceptedAnswer": { "@type": "Answer", "text": "By default the store is plaintext, pretty-printed JSON — you own the bytes and can read, diff, and back them up with any tool. You can opt in to passphrase encryption at rest in the standard age format (scrypt); the file then also decrypts with the reference age CLI. There is no recovery from a lost passphrase, which is exactly why encryption is opt-in." }
-    },
-    {
-      "@type": "Question",
-      "name": "Does Envarsa write into my projects or inject environment variables?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Only when you ask. It never injects variables into processes, and by default it only stores, copies, and exports — it does not write into your project tree. The one exception is an explicit, user-initiated write to a .env*.local file on a path you choose — in merge or fresh mode, or scaffolded from a .env.example. A committed example file (.env.example, .sample, .template, .dist) is always refused, and the target path is resolved and guarded in Rust, never taken from the webview. Using a value always means you place it." }
-    },
-    {
-      "@type": "Question",
-      "name": "Which platforms does Envarsa run on?",
-      "acceptedAnswer": { "@type": "Answer", "text": "On Windows 10 and 11 (x64), from the Microsoft Store or as a per-user installer — both need the WebView2 runtime, preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as a Flatpak, which runs on any distro with Flatpak installed; Flatpak fetches the GNOME runtime it needs from Flathub." }
-    },
-    {
-      "@type": "Question",
-      "name": "Why is every value masked, even boring ones like PORT?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Masking is structural, not heuristic. An entry is an env var: its key is always visible, its value is always masked until you reveal it, one value at a time. Envarsa never guesses what counts as a secret — even unparseable lines are masked, because a malformed line is as likely as any to hold one." }
-    },
-    {
-      "@type": "Question",
-      "name": "What happens if the store file gets corrupted?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Every save is atomic (temp file, fsync, rename) and keeps a one-step .bak sibling. A corrupt store is never overwritten; the app offers the backup at startup, and restoring is only possible from that corrupt-store gate, never against a healthy session." }
+      "name": "Can I use it without a .env file?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Create a project by hand and type keys, values and # comments into the editor. Editing a project saves a new version and keeps the old one." }
     },
     {
       "@type": "Question",
       "name": "How do I move my library to another machine?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Portability is manual and yours. Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on the other machine: its projects merge into the library there, with name conflicts flagged per project. Export and Import are the way to move a library; the live store file stays in the app's data folder (%APPDATA% on Windows, ~/.var/app/dev.envarsa.Envarsa in the Flatpak). A store moved elsewhere by an earlier version keeps working, and Settings offers to move it back." }
+      "acceptedAnswer": { "@type": "Answer", "text": "In Settings, export a copy, optionally protected with a passphrase, and import it on the other machine. Its projects are added to the library there; if a name already exists, you choose to replace, rename or skip it." }
     },
     {
       "@type": "Question",
-      "name": "Is Envarsa free and open source?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Envarsa is MIT-licensed and the full source is on GitHub: a no-build ES-module frontend over a Rust core (Tauri 2)." }
+      "name": "Is it free?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Envarsa is MIT-licensed and the source is on GitHub. It's built with Rust and Tauri 2." }
     }
   ]
 }
@@ -119,9 +97,10 @@
 <link rel="stylesheet" href="/site.css">
 
 <style>
-  .mono { font-family: var(--mono); }
-  .muted { color: var(--muted); }
-
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
   .skip {
     position: absolute; left: -9999px; top: 0;
     background: var(--accent); color: var(--accent-ink);
@@ -129,209 +108,118 @@
   }
   .skip:focus { left: 0; }
 
-  section { scroll-margin-top: 84px; }
+  section { padding: 96px 0 0; scroll-margin-top: 76px; }
 
   /* ------------------------------------------------------------ header */
 
-  .site-nav { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; }
+  .site-nav { display: flex; gap: 22px; margin-left: auto; }
   .site-nav a { color: var(--muted); font-size: 14px; }
   .site-nav a:hover { color: var(--text); text-decoration: none; }
   .nav-cta { display: flex; gap: 10px; }
 
-  /* -------------------------------------------------------------- hero */
-
-  .hero { padding: 72px 0 40px; }
-  .hero-grid {
-    display: grid; grid-template-columns: 1.04fr 0.96fr;
-    gap: 52px; align-items: center;
-  }
-  h1 {
-    font-size: clamp(30px, 4.6vw, 44px);
-    line-height: 1.16; font-weight: 700; letter-spacing: -0.5px;
-    margin: 0 0 18px;
-  }
-  h1 .accent { color: var(--accent); }
-  .hero-sub { font-size: 17.5px; color: var(--muted); margin: 0 0 26px; max-width: 56ch; }
-  .hero-sub strong { color: var(--text); font-weight: 600; }
-  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-  .cta-note { font-size: 13px; color: var(--faint); margin: 0 0 22px; }
-  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip {
-    font-family: var(--mono); font-size: 12px; color: var(--muted);
-    border: 1px solid var(--border); border-radius: 99px;
-    padding: 4px 11px; background: var(--bg-rail); white-space: nowrap;
-  }
-
-  /* --------------------------------------------- interactive env card */
-
-  .envcard {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
-  }
-  .envcard-bar {
-    display: flex; align-items: center; gap: 10px;
-    background: var(--accent); color: var(--accent-ink);
-    font-size: 13px; font-weight: 600; padding: 8px 12px;
-  }
-  .envcard-bar .winbtns { margin-left: auto; letter-spacing: 7px; font-size: 11px; opacity: 0.75; }
-  .live-chip {
-    font-family: var(--mono); font-size: 10.5px; font-weight: 700;
-    background: rgba(15, 17, 22, 0.22); border-radius: 99px; padding: 2px 9px;
-    text-transform: uppercase; letter-spacing: 0.8px;
-  }
-  .envcard-body { padding: 14px 6px 10px; }
-  .envrow-comment {
-    font-family: var(--mono); font-size: 12.5px; color: var(--faint);
-    padding: 8px 14px 2px;
-  }
-  .envrow {
-    display: flex; align-items: center; gap: 12px;
-    padding: 7px 14px; border-radius: 7px;
-  }
-  .envrow .key {
-    font-family: var(--mono); font-size: 13.5px; font-weight: 700;
-    color: var(--text); white-space: nowrap;
-  }
-  .reuse {
-    font-family: var(--mono); font-size: 10.5px; color: var(--accent);
-    border: 1px solid rgba(229, 179, 90, 0.4); border-radius: 99px;
-    padding: 1px 7px; white-space: nowrap; cursor: help;
-  }
-  .val {
-    position: relative; margin-left: auto; max-width: 58%;
-    background: none; border: none; padding: 4px 8px; border-radius: 6px;
-    font-family: var(--mono); font-size: 13px; color: var(--mask);
-    letter-spacing: 2px; cursor: pointer; overflow: hidden;
-    text-overflow: ellipsis; white-space: nowrap; text-align: right;
-  }
-  .val:hover { background: var(--panel-2); color: var(--muted); }
-  .val:focus-visible { outline: 1px solid var(--accent-dim); }
-  .envrow.revealed .val { color: var(--good); letter-spacing: 0; }
-  .envrow.revealed .val::after {
-    content: ""; position: absolute; left: 0; bottom: 0; height: 2px;
-    background: var(--accent-dim); width: 100%;
-    animation: drain 5s linear forwards;
-  }
-  @keyframes drain { from { width: 100%; } to { width: 0; } }
-  .envcard-note {
-    border-top: 1px solid var(--border-soft);
-    font-size: 12.5px; color: var(--muted); padding: 10px 14px 12px; margin: 0;
-  }
-  .envcard-note .k { color: var(--accent); font-weight: 600; }
-
   /* ----------------------------------------------------------- shared */
 
-  .kicker {
-    font-family: var(--mono); font-size: 13px; color: var(--accent);
-    margin: 0 0 10px; letter-spacing: 0.3px;
+  .label { font-family: var(--mono); font-size: 13px; color: var(--faint); margin: 0 0 10px; }
+  h2 {
+    font-size: clamp(26px, 3.4vw, 34px); line-height: 1.15;
+    letter-spacing: -0.6px; margin: 0 0 16px; max-width: 26ch;
   }
-  h2 { font-size: clamp(24px, 3.2vw, 31px); line-height: 1.2; margin: 0 0 14px; letter-spacing: -0.3px; }
-  h3 { font-size: 16.5px; margin: 0 0 8px; }
-  .lede { color: var(--muted); max-width: 64ch; margin: 0 0 30px; font-size: 16.5px; }
-  .lede strong, .card p strong { color: var(--text); font-weight: 600; }
+  h3 { font-size: 21px; line-height: 1.3; letter-spacing: -0.2px; margin: 0 0 10px; }
+  .intro { color: var(--muted); font-size: 17px; max-width: 62ch; margin: 0; }
 
-  section { padding: 52px 0; }
-
-  .cards { display: grid; gap: 14px; }
-  .cards-3 { grid-template-columns: repeat(3, 1fr); }
-  .card {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 20px 20px 16px;
-  }
-  .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
-  .card h3 .num { color: var(--accent); font-family: var(--mono); font-size: 13px; margin-right: 8px; }
-
-  /* --------------------------------------------------------- showcase */
-
-  .showcase { padding-top: 24px; }
   .frame {
     background: var(--bg-rail); border: 1px solid var(--border);
-    border-radius: 14px; padding: 10px; box-shadow: var(--shadow);
+    border-radius: 12px; padding: 8px; box-shadow: var(--shadow); margin: 0;
   }
-  .frame img { display: block; width: 100%; height: auto; border-radius: 8px; }
-  .frame-caption { text-align: center; font-size: 13px; color: var(--faint); margin: 12px 0 0; }
+  .frame img { display: block; width: 100%; height: auto; border-radius: 7px; }
 
-  /* ------------------------------------------------------------- loop */
+  /* -------------------------------------------------------------- hero */
 
-  .loop-grid { grid-template-columns: repeat(3, 1fr); }
-
-  /* ---------------------------------------------------------- gallery */
-
-  .gallery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-  .shot figcaption { font-size: 13px; color: var(--muted); margin-top: 9px; padding: 0 2px; }
-  .shot { margin: 0; }
-
-  /* ------------------------------------------------------------ store */
-
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
-  .ticks { list-style: none; margin: 0; padding: 0; }
-  .ticks li {
-    position: relative; padding: 0 0 14px 28px;
-    color: var(--muted); font-size: 15px;
+  .hero { padding-top: 84px; text-align: center; }
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 54px); line-height: 1.08; font-weight: 700;
+    letter-spacing: -1.4px; margin: 0 auto 20px; max-width: 16ch;
   }
-  .ticks li::before {
-    content: "▸"; position: absolute; left: 4px; top: 0;
-    color: var(--accent); font-size: 13px;
+  .hero h1 .accent { color: var(--accent); }
+  .lead { color: var(--muted); font-size: 18px; max-width: 58ch; margin: 0 auto 30px; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .cta-note { color: var(--muted); font-size: 13.5px; margin: 0 0 56px; }
+  .hero .frame { box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+
+  /* ---------------------------------------------------------- features */
+
+  .feat {
+    display: grid; grid-template-columns: 1fr 1.25fr;
+    gap: 56px; align-items: center; padding: 36px 0;
   }
-  .ticks li strong { color: var(--text); font-weight: 600; }
+  .feat + .feat { border-top: 1px solid var(--border-soft); }
+  .feat.flip .feat-text { order: 2; }
+  .feat.flip { grid-template-columns: 1.25fr 1fr; }
+  .feat p { color: var(--muted); margin: 0; }
 
-  pre {
-    background: var(--bg-rail); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 16px 18px; overflow-x: auto;
-    font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
-    color: var(--muted); margin: 0 0 14px;
+  /* ------------------------------------------------- privacy and faq */
+
+  .rows { border-top: 1px solid var(--border); margin-top: 32px; }
+  .row { border-bottom: 1px solid var(--border); }
+  .row summary,
+  .row .more {
+    display: grid; grid-template-columns: 2fr 3fr 20px; gap: 32px;
   }
-  pre .c { color: var(--faint); }
-  pre .s { color: var(--good); }
-  pre .k { color: var(--accent); }
-  code { white-space: nowrap; }
-  pre code { background: none; border: none; padding: 0; white-space: pre; }
-
-  /* --------------------------------------------------------- security */
-
-  .security .card { margin-bottom: 14px; }
-  .security .card:last-child { margin-bottom: 0; }
-  .security .card p { font-size: 15px; }
-
-  /* -------------------------------------------------------------- faq */
-
-  .faq details {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: var(--radius); margin-bottom: 10px;
+  .row summary {
+    list-style: none; cursor: pointer; align-items: baseline; padding: 22px 4px;
   }
-  .faq summary {
-    cursor: pointer; padding: 15px 18px; font-weight: 600; font-size: 15.5px;
-    list-style: none; display: flex; align-items: center; gap: 12px;
-  }
-  .faq summary::-webkit-details-marker { display: none; }
-  .faq summary::before { content: "+"; color: var(--accent); font-family: var(--mono); font-size: 16px; }
-  .faq details[open] summary::before { content: "−"; }
-  .faq details p { margin: 0; padding: 0 18px 16px 44px; color: var(--muted); font-size: 14.5px; }
+  .row summary::-webkit-details-marker { display: none; }
+  .row summary:hover h3 { color: var(--accent); }
+  .row summary:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; border-radius: 4px; }
+  .row h3 { font-size: 17px; margin: 0; }
+  .row .say { color: var(--muted); font-size: 15px; }
+  .row .mark { color: var(--faint); font-family: var(--mono); text-align: right; }
+  .row .mark::before { content: "+"; }
+  .row[open] .mark::before { content: "\2212"; }
+  .row .more { padding: 0 4px 22px; }
+  .row .more > div { grid-column: 2; }
+  .row .more p { color: var(--muted); font-size: 15px; margin: 0 0 10px; }
+  .row .more p:last-child { margin-bottom: 0; }
+  .row .more code { overflow-wrap: anywhere; }
+
+  .faq .row summary h3 { grid-column: 1 / 3; }
+  .faq .row .more > div { grid-column: 1 / 3; max-width: 70ch; }
 
   /* --------------------------------------------------------- download */
 
-  .dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+  .dl-os { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 32px 0 12px; }
+  .dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .dl-card {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 12px; padding: 24px;
     display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
   }
-  .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
-  .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 14.5px; flex: 1; }
-  .dl-os { font-family: var(--mono); font-size: 12.5px; letter-spacing: 0.3px; color: var(--accent); margin: 0 0 12px; }
+  .dl-card h3 { margin: 0; font-size: 18px; }
+  .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 15px; flex: 1; }
+  .dl-card code { overflow-wrap: anywhere; }
+  .dl-note { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
 
   /* ------------------------------------------------------- responsive */
 
-  @media (max-width: 940px) {
-    .hero { padding-top: 48px; }
-    .hero-grid, .split { grid-template-columns: 1fr; gap: 36px; }
-    .cards-3, .loop-grid { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 900px) {
+    section { padding-top: 72px; }
     .site-nav { display: none; }
+    .nav-cta { margin-left: auto; }
+    .feat, .feat.flip { grid-template-columns: 1fr; gap: 24px; }
+    .feat.flip .feat-text { order: 0; }
+    .row summary { grid-template-columns: 1fr 20px; gap: 6px 16px; }
+    .row summary h3, .faq .row summary h3 { grid-column: 1; grid-row: 1; }
+    .row summary .say { grid-column: 1; grid-row: 2; }
+    .row summary .mark { grid-column: 2; grid-row: 1; }
+    .row .more { grid-template-columns: 1fr; }
+    .row .more > div, .faq .row .more > div { grid-column: 1; }
   }
   @media (max-width: 600px) {
-    .cards-3, .loop-grid, .gallery-grid, .dl-grid { grid-template-columns: 1fr; }
-    .val { max-width: 50%; }
-    section { padding: 40px 0; }
+    .container { padding: 0 16px; }
+    .hero { padding-top: 56px; }
+    .lead { font-size: 16.5px; }
+    .dl-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -341,13 +229,13 @@
 
 <header class="site-head">
   <div class="container nav-row">
-    <a class="brand" href="#top" aria-label="Envarsa — back to top">
+    <a class="brand" href="#top" aria-label="Envarsa, back to top">
       <img src="/brand/mark.svg" width="26" height="26" alt="">
       Envarsa
     </a>
     <nav class="site-nav" aria-label="Page sections">
-      <a href="#how">How it works</a>
-      <a href="#security">Security</a>
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
       <a href="#faq">FAQ</a>
     </nav>
     <div class="nav-cta">
@@ -360,236 +248,132 @@
 <main id="main">
 
   <!-- ================================================== hero -->
-  <section class="hero" aria-label="Introduction">
-    <div class="container hero-grid">
-      <div>
-        <h1><span class="accent">Envarsa</span> — a local-first <code>.env</code> manager for Windows and Linux.</h1>
-        <p class="hero-sub">
-          <strong>Capture</strong> a project&rsquo;s <code>.env</code> as a snapshot, <strong>recall</strong> its
-          values masked, and <strong>hand them back</strong> by clipboard or export. Your environment variables
-          live in one file on your machine — no cloud, no telemetry.
-        </p>
-        <div class="cta-row">
-          <a class="btn btn-primary" href="#download">Download</a>
-          <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa" rel="noopener">View on GitHub</a>
-        </div>
-        <p class="cta-note">Free &amp; MIT-licensed, for Windows&nbsp;10/11 and Linux · pick your install below</p>
-        <div class="chip-row">
-          <span class="chip">no cloud</span>
-          <span class="chip">no telemetry</span>
-          <span class="chip">no egress by default</span>
-          <span class="chip">free &amp; MIT-licensed</span>
-          <span class="chip">one portable store file</span>
-        </div>
-      </div>
-
-      <div>
-        <div class="envcard" id="envdemo">
-          <div class="envcard-bar">
-            <span>acme-api — latest snapshot</span>
-            <span class="live-chip">live demo</span>
-            <span class="winbtns" aria-hidden="true">─ □ ✕</span>
-          </div>
-          <div class="envcard-body">
-            <div class="envrow-comment"># Server</div>
-            <div class="envrow">
-              <span class="key">PORT</span>
-              <button class="val" type="button" data-value="8080" aria-pressed="false" aria-label="Reveal the value of PORT (demo)"><span class="vtext">••••••••••</span></button>
-            </div>
-            <div class="envrow-comment"># Database</div>
-            <div class="envrow">
-              <span class="key">DATABASE_URL</span>
-              <span class="reuse" title="This key also lives in 1 other project, with the same value — flagged, never linked." aria-label="Key reused in 1 other project">⧉ 1</span>
-              <button class="val" type="button" data-value="postgres://acme:demo-not-real@db.internal:5432/api" aria-pressed="false" aria-label="Reveal the value of DATABASE_URL (demo)"><span class="vtext">••••••••••</span></button>
-            </div>
-            <div class="envrow-comment"># Auth</div>
-            <div class="envrow">
-              <span class="key">JWT_SECRET</span>
-              <button class="val" type="button" data-value="hs512_2f9c8b1e_demo_not_a_real_secret" aria-pressed="false" aria-label="Reveal the value of JWT_SECRET (demo)"><span class="vtext">••••••••••</span></button>
-            </div>
-            <div class="envrow">
-              <span class="key">STRIPE_SECRET_KEY</span>
-              <button class="val" type="button" data-value="sk_test_demoDemoDemo000000" aria-pressed="false" aria-label="Reveal the value of STRIPE_SECRET_KEY (demo)"><span class="vtext">••••••••••</span></button>
-            </div>
-          </div>
-          <p class="envcard-note">
-            <span class="k">Click a value.</span> Keys are always visible; values are dots until you ask, one at a
-            time — then they hide themselves again. In the app: after 30&nbsp;seconds, and whenever the window
-            loses focus.
-            <noscript> (This inline demo needs JavaScript — the masking you see is the resting state.)</noscript>
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================================================== showcase -->
-  <section class="showcase" aria-label="Screenshot">
+  <section class="hero" aria-labelledby="hero-h">
     <div class="container">
-      <div class="frame">
+      <h1 id="hero-h">One place for all your <span class="accent">.env</span> files</h1>
+      <p class="lead">
+        Envarsa keeps a copy of each project&rsquo;s <code>.env</code> file on your computer. You can find a value
+        months later, see which projects share a key, and write a working <code>.env.local</code> for a fresh
+        checkout. Nothing is uploaded anywhere.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#download">Download</a>
+        <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa" rel="noopener">Source on GitHub</a>
+      </div>
+      <p class="cta-note">Free and open source, for Windows 10/11 and Linux.</p>
+      <figure class="frame">
         <img src="screenshots/demo.png" width="1122" height="752" decoding="async" fetchpriority="high"
-             alt="Envarsa main window: a project list on the left with reuse badges, the lumen-api project open showing nine environment keys grouped under comments, every value masked as a row of dots.">
-      </div>
-      <p class="frame-caption">Sample data (<code>ENVARSA_DEMO=1</code>): three projects, nine keys on screen, every value masked.</p>
+             alt="Envarsa's main window: a list of three projects on the left, and the lumen-api project open on the right with its keys grouped under comments and every value hidden.">
+      </figure>
     </div>
   </section>
 
-  <!-- ================================================== why -->
-  <section id="why" aria-labelledby="why-h">
+  <!-- ================================================== problem -->
+  <section id="problem" aria-labelledby="problem-h">
     <div class="container">
-      <p class="kicker"># the problem</p>
-      <h2 id="why-h">Why a dedicated <code>.env</code> manager</h2>
-      <p class="lede">
-        Your <code>.env</code> files are git-ignored on purpose and backed up by nothing — they accumulate,
-        drift, and vanish.
+      <p class="label"># the problem</p>
+      <h2 id="problem-h">.env files aren&rsquo;t in git, so nothing backs them up</h2>
+      <p class="intro">
+        Every project has its own, on every machine you&rsquo;ve used. Delete the folder and the values are gone.
+        The same database URL ends up in several projects, and when you change it in one, the others go stale
+        without anything telling you.
       </p>
-      <div class="cards cards-3">
-        <div class="card">
-          <h3>Scattered</h3>
-          <p>One per project, per machine. Months later, the API key you need is in a folder you already deleted.</p>
-        </div>
-        <div class="card">
-          <h3>Duplicated</h3>
-          <p>The same <code>DATABASE_URL</code> pasted into five projects. One got rotated, and now you can&rsquo;t tell which value is current.</p>
-        </div>
-        <div class="card">
-          <h3>Easily lost</h3>
-          <p>No backups, no history, no sync. A dead disk or a stray <code>rm</code> takes them with it — and they&rsquo;re the one thing you can&rsquo;t re-clone.</p>
-        </div>
-      </div>
     </div>
   </section>
 
-  <!-- ================================================== how -->
-  <section id="how" aria-labelledby="how-h">
+  <!-- ================================================== features -->
+  <section id="features" aria-labelledby="features-h">
     <div class="container">
-      <p class="kicker"># how it works</p>
-      <h2 id="how-h">How it works: capture, recall, hand back</h2>
-      <p class="lede">
-        Envarsa stores, copies, and exports your <code>.env</code> values. It never injects them into processes
-        or writes to your project tree unless you ask — and the only thing it writes is a <code>.env*.local</code>
-        you choose, never a committed example file.
-      </p>
-      <div class="cards loop-grid">
-        <div class="card">
-          <h3><span class="num">01</span>Capture</h3>
-          <p>Import a <code>.env</code> by file picker, paste, or drop. Comments, blanks, and unparseable lines are kept <strong>byte-for-byte</strong>. Capture is manual; Envarsa never watches your files.</p>
-        </div>
-        <div class="card">
-          <h3><span class="num">02</span>Recall</h3>
-          <p>Find a project by the <strong>name you chose</strong>, not a path. Duplicate keys are tagged <code>overridden</code>; keys shared across projects get a reuse badge — flagged, never linked.</p>
-        </div>
-        <div class="card">
-          <h3><span class="num">03</span>Hand back</h3>
-          <p>Copy a value (straight to clipboard, never shown on screen), copy the block, or export a <strong>byte-identical</strong> <code>.env</code>. Copies clear after 30&nbsp;seconds.</p>
-        </div>
-        <div class="card">
-          <h3><span class="num">04</span>History</h3>
-          <p>Every capture appends a snapshot. View past ones read-only, or restore one as latest.</p>
-        </div>
-        <div class="card">
-          <h3><span class="num">05</span>Write a <code>.env.local</code></h3>
-          <p>Write a snapshot to a <code>.env*.local</code> you pick: <strong>merge</strong> to fill values while keeping the file&rsquo;s comments and keys, or <strong>fresh</strong> to overwrite — with a preview first. Scaffold from a <code>.env.example</code> with unfillable keys blanked; committed example files are <strong>refused</strong>.</p>
-        </div>
-        <div class="card">
-          <h3><span class="num">06</span>Build it by hand</h3>
-          <p>No file needed: type keys, values, and <code>#</code> comments into the <strong>structured editor</strong> and save. Editing a snapshot saves a <strong>new</strong> one and keeps the old.</p>
-        </div>
-      </div>
-    </div>
-  </section>
+      <p class="label"># what it does</p>
+      <h2 id="features-h" class="sr-only">What Envarsa does</h2>
 
-  <!-- ================================================== gallery -->
-  <section id="tour" aria-labelledby="tour-h">
-    <div class="container">
-      <p class="kicker"># screenshots</p>
-      <h2 id="tour-h">Screenshots</h2>
-      <div class="gallery-grid">
-        <figure class="shot frame">
-          <img src="screenshots/screenshot-01.png" width="1122" height="752" loading="lazy" decoding="async"
-               alt="Envarsa first run: an empty library with the message 'Your env values, under one roof' and a button to capture the first project.">
-          <figcaption>First run: capture a project, or drop a <code>.env</code> onto the window.</figcaption>
+      <div class="feat">
+        <div class="feat-text">
+          <h3>Every project&rsquo;s variables, in one library</h3>
+          <p>Add a project by picking its <code>.env</code> file, pasting it, or dropping it on the window. Envarsa
+          keeps the file exactly as it was, comments included. Each time you add it again, the old version is
+          kept, so you can look back or restore it.</p>
+        </div>
+        <figure class="frame">
+          <img src="screenshots/feature-history.png" width="840" height="314" loading="lazy" decoding="async"
+               alt="The lumen-api project showing an older snapshot, with a banner reading 'Viewing history' and buttons to bring it back as latest or return to the latest.">
         </figure>
-        <figure class="shot frame">
-          <img src="screenshots/screenshot-02.png" width="1122" height="752" loading="lazy" decoding="async"
-               alt="Capture dialog: paste KEY=value lines or pick a .env file, name the project, optionally record a file path hint.">
-          <figcaption>Capture from a file or pasted lines. The name you give is the project&rsquo;s identity.</figcaption>
+      </div>
+
+      <div class="feat flip">
+        <div class="feat-text">
+          <h3>See where a key is shared, and whether it matches</h3>
+          <p>When the same key appears in more than one project, Envarsa marks it and tells you whether the values
+          match. If you rotate a database password in one project, you can see which others still have the old
+          one.</p>
+        </div>
+        <figure class="frame">
+          <img src="screenshots/feature-shared.png" width="403" height="202" loading="lazy" decoding="async"
+               alt="A popover on the SENTRY_DSN key listing two other projects: lumen-web with the same value, and tooling-scripts with a different value.">
         </figure>
-        <figure class="shot frame">
-          <img src="screenshots/screenshot-03.png" width="1122" height="752" loading="lazy" decoding="async"
-               alt="New project by hand dialog: name the project, optionally record a file path, then add KEY=value rows — each with an export toggle — plus buttons to add a variable, add a comment, or seed from a .env.example.">
-          <figcaption>Build a project by hand, or seed it from a <code>.env.example</code>. Nothing is written to disk unless you choose.</figcaption>
-        </figure>
-        <figure class="shot frame">
-          <img src="screenshots/screenshot-04.png" width="1122" height="752" loading="lazy" decoding="async"
-               alt="Settings dialog: the store file path with buttons to show, export and import it, and a Protection section for opt-in passphrase encryption with an explicit no-recovery checkbox.">
-          <figcaption>Settings: one portable store file, with opt-in <code>age</code> encryption and an explicit no-recovery checkbox.</figcaption>
+      </div>
+
+      <div class="feat">
+        <div class="feat-text">
+          <h3>Set up a fresh checkout from its <code>.env.example</code></h3>
+          <p>Point Envarsa at a project&rsquo;s <code>.env.example</code> and it writes a <code>.env.local</code>
+          beside it, filling in every value it has and leaving the rest blank for you. You see a preview
+          first. It never writes to the example file itself.</p>
+        </div>
+        <figure class="frame">
+          <img src="screenshots/feature-write.png" width="604" height="359" loading="lazy" decoding="async"
+               alt="The Write .env.local dialog on its 'From a .env.example' tab, previewing which keys will be filled in and which will be left blank.">
         </figure>
       </div>
     </div>
   </section>
 
-  <!-- ================================================== store -->
-  <section id="store" aria-labelledby="store-h">
+  <!-- ================================================== privacy -->
+  <section id="privacy" aria-labelledby="privacy-h">
     <div class="container">
-      <p class="kicker"># the store file</p>
-      <h2 id="store-h">One portable store file</h2>
-      <div class="split">
-        <div>
-          <ul class="ticks">
-            <li><strong>Plaintext JSON by default.</strong> Read it, diff it, back it up with anything. Captured <code>.env</code> text is embedded verbatim.</li>
-            <li><strong>Atomic writes.</strong> Temp file, fsync, rename, with a one-step <code>.bak</code> sibling. A corrupt store is never overwritten — the app offers the backup at startup.</li>
-            <li><strong>Optional <a href="https://age-encryption.org" rel="noopener">age</a> encryption at rest</strong> (scrypt passphrase), decryptable with the reference age CLI. No recovery if the passphrase is lost.</li>
-            <li><strong>Manual portability.</strong> Export a copy (optionally age-encrypted) and import it elsewhere; projects merge, name conflicts flagged per project.</li>
-          </ul>
-        </div>
-        <div>
-<pre aria-label="Store file location and format excerpt"><code><span class="c"># default location (the ENVARSA_STORE_PATH env var overrides it)</span>
-%APPDATA%\com.envarsa.app\envarsa.store            <span class="c"># Windows</span>
-~/.var/app/dev.envarsa.Envarsa/data/envarsa.store  <span class="c"># Linux (Flatpak)</span>
-
-<span class="c"># plaintext JSON — read it, diff it</span>
-{
-  <span class="k">"format"</span>:   <span class="s">"envarsa-store"</span>,
-  <span class="k">"version"</span>:  1,
-  <span class="k">"projects"</span>: [ { <span class="k">"name"</span>: <span class="s">"acme-api"</span>,
-                  <span class="k">"snapshots"</span>: [ &hellip; ] } ]
-}</code></pre>
-<pre aria-label="Decrypting the store with the age CLI"><code><span class="c"># if encrypted, decrypt with the standard age CLI</span>
-$ age -d envarsa.store &gt; store.json</code></pre>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================================================== security -->
-  <section id="security" class="security" aria-labelledby="sec-h">
-    <div class="container">
-      <p class="kicker"># security &amp; privacy</p>
-      <h2 id="sec-h">Security and privacy</h2>
-      <p class="lede">
-        Envarsa keeps your values in one file and doesn&rsquo;t phone home. The store is <strong>plaintext JSON by
-        default</strong>, with optional <code>age</code> encryption at rest; masking hides values on screen, not on disk.
-      </p>
-      <div class="card">
-        <h3>Masking</h3>
-        <p>Keys are always visible; values are masked until you reveal one, one at a time, and auto-hide after 30&nbsp;seconds or on focus loss. Masking is structural — even unparseable lines are masked.</p>
-      </div>
-      <div class="card">
-        <h3>Sandboxed UI</h3>
-        <p>The webview is sandboxed to the app&rsquo;s own commands (CSP <code>default-src 'self'</code>). Values reach it only on explicit reveal, and single-value copies bypass it entirely. No command takes a filesystem path from the webview — dropped files are read in Rust, and import targets resolve behind opaque tokens.</p>
-      </div>
-      <div class="card">
-        <h3>Clipboard</h3>
-        <p>Copies clear after 30&nbsp;seconds and skip Windows clipboard history (Win+V) and the cloud clipboard. Linux has no such flag — a clipboard manager (Klipper, CopyQ) keeps its own copy, so clear it after copying a secret.</p>
-      </div>
-      <div class="card">
-        <h3>One file, by design</h3>
-        <p>Everything in one file is the point — and the reason for atomic backups and opt-in <code>age</code> encryption at rest.</p>
-      </div>
-      <div class="card">
-        <h3>Network: one opt-in update check</h3>
-        <p>No network calls by default. The only exception is the update check, <strong>off by default</strong>: a GET to <code>api.github.com</code> for the latest release tag, validated as semver, with nothing auto-downloaded. One module — the app&rsquo;s entire network surface.</p>
+      <p class="label"># privacy</p>
+      <h2 id="privacy-h">Your values stay on your computer</h2>
+      <div class="rows">
+        <details class="row">
+          <summary><h3>Nothing is uploaded</h3><span class="say">There&rsquo;s no account and no server. Envarsa works entirely offline.</span><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>The only network request it can make is a check for new versions, and only the Windows installer
+            has it. It runs when you click Check for updates in Settings, or by itself if you turn that on there.
+            It asks GitHub (<code>api.github.com</code>) for the latest version number and sends nothing else,
+            and nothing downloads or installs itself. The Microsoft Store and Flatpak versions make no network
+            requests at all.</p>
+          </div></div>
+        </details>
+        <details class="row">
+          <summary><h3>Values stay hidden on screen</h3><span class="say">You see the keys. Each value stays hidden until you choose to show it.</span><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>You show values one by one, and each hides again after 30 seconds or when the window loses focus.
+            Every value is hidden, even ones that look harmless like <code>PORT</code>, because Envarsa
+            doesn&rsquo;t guess which ones are secret. Copying a single value sends it to the clipboard without
+            showing it.</p>
+          </div></div>
+        </details>
+        <details class="row">
+          <summary><h3>Copied values clear themselves</h3><span class="say">The clipboard is wiped 30 seconds after you copy a value.</span><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>On Windows, copies also skip clipboard history (Win+V) and the cloud clipboard. Linux has no
+            equivalent, so a clipboard manager such as Klipper or CopyQ keeps its own copy; clear it after
+            copying a secret.</p>
+          </div></div>
+        </details>
+        <details class="row">
+          <summary><h3>Your library is one file you can read</h3><span class="say">Plain JSON on your disk, with an optional passphrase.</span><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>The file lives in the app&rsquo;s data folder: <code>%APPDATA%\com.envarsa.app\</code> on Windows,
+            <code>~/.var/app/dev.envarsa.Envarsa/data/</code> in the Flatpak. Every save writes a temporary file
+            and swaps it in, keeping the previous version as a <code>.bak</code>. If the file is ever damaged,
+            Envarsa offers the backup when it starts.</p>
+            <p>You can protect it with a passphrase in the standard
+            <a href="https://age-encryption.org" rel="noopener">age</a> format, which the <code>age</code>
+            command-line tool can also open. A lost passphrase can&rsquo;t be recovered, which is why it&rsquo;s
+            optional.</p>
+          </div></div>
+        </details>
       </div>
     </div>
   </section>
@@ -597,93 +381,76 @@ $ age -d envarsa.store &gt; store.json</code></pre>
   <!-- ================================================== faq -->
   <section id="faq" class="faq" aria-labelledby="faq-h">
     <div class="container">
-      <p class="kicker"># faq</p>
-      <h2 id="faq-h">Frequently asked questions</h2>
-      <details>
-        <summary>Does Envarsa send my values anywhere?</summary>
-        <p>No. Your values live in one file on your disk and never leave unless you export them yourself. The
-        only egress is an opt-in update check, off by default: one GET to <code>api.github.com</code> for the
-        latest release tag &mdash; no values sent, and nothing downloads or installs itself.</p>
-      </details>
-      <details>
-        <summary>Is the store encrypted?</summary>
-        <p>By default it&rsquo;s plaintext, pretty-printed JSON you own. You can opt in to passphrase encryption
-        at rest in the standard <a href="https://age-encryption.org" rel="noopener">age</a> format (scrypt) —
-        readable by the reference age CLI. A lost passphrase can&rsquo;t be recovered, which is why it&rsquo;s
-        opt-in.</p>
-      </details>
-      <details>
-        <summary>Does Envarsa write into my projects or inject environment variables?</summary>
-        <p>Only when you ask — it never injects into processes. The one write is a <code>.env*.local</code> on a
-        path you choose (merge, fresh, or scaffolded from a <code>.env.example</code>). A committed example file
-        (<code>.env.example</code>, <code>.sample</code>, <code>.template</code>, <code>.dist</code>) is always
-        refused, and the path is resolved and guarded in Rust, never taken from the webview. Using a value always
-        means you place it.</p>
-      </details>
-      <details>
-        <summary>Which platforms does it run on?</summary>
-        <p>On Windows 10 and 11 (x64), from the Microsoft Store or as a per-user installer — both need the WebView2
-        runtime, preinstalled on Windows 11 and on any Windows 10 kept current. On Linux (x64), as a Flatpak, which
-        runs on any distro with Flatpak installed; Flatpak fetches the GNOME runtime it needs from Flathub.</p>
-      </details>
-      <details>
-        <summary>Why is every value masked, even boring ones like <code>PORT</code>?</summary>
-        <p>Because masking is structural, not heuristic — Envarsa never guesses what counts as a secret, so even
-        unparseable lines are masked, since a malformed line is as likely as any to hold one.</p>
-      </details>
-      <details>
-        <summary>What happens if the store file gets corrupted?</summary>
-        <p>Every save is atomic and keeps a one-step <code>.bak</code> sibling, so a corrupt store is never
-        overwritten. The app offers the backup at startup — restoring is only possible from that corrupt-store
-        gate, never against a healthy session.</p>
-      </details>
-      <details>
-        <summary>How do I move my library to another machine?</summary>
-        <p>Export a copy from Settings — optionally age-encrypted with a transport passphrase — and import it on
-        the other machine: its projects merge into the library there, with name conflicts flagged per project
-        (replace, rename, or skip). Export and Import are the way to move a library; the live store file stays in
-        the app&rsquo;s data folder (<code>%APPDATA%</code> on Windows, <code>~/.var/app/dev.envarsa.Envarsa</code>
-        in the Flatpak). A store moved elsewhere by an earlier version keeps working, and Settings offers to move it
-        back.</p>
-      </details>
-      <details>
-        <summary>Is Envarsa free and open source?</summary>
-        <p>Yes — MIT-licensed, with the full source on
-        <a href="https://github.com/terminalis/envarsa" rel="noopener">GitHub</a>: a no-build ES-module frontend
-        over a Rust core (Tauri&nbsp;2).</p>
-      </details>
+      <p class="label"># faq</p>
+      <h2 id="faq-h">Questions</h2>
+      <div class="rows">
+        <details class="row">
+          <summary><h3>Does Envarsa change files in my projects?</h3><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>Only when you ask it to write a <code>.env.local</code>, and only after showing you the file&rsquo;s
+            path and a preview. It can merge values into an existing file or replace it. It never writes to
+            example files (<code>.env.example</code>, <code>.sample</code>, <code>.template</code>,
+            <code>.dist</code>) and never sets environment variables for running programs.</p>
+          </div></div>
+        </details>
+        <details class="row">
+          <summary><h3>Can I use it without a <code>.env</code> file?</h3><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>Yes. Create a project by hand and type keys, values and <code>#</code> comments into the editor.
+            Editing a project saves a new version and keeps the old one.</p>
+          </div></div>
+        </details>
+        <details class="row">
+          <summary><h3>How do I move my library to another machine?</h3><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>In Settings, export a copy, optionally protected with a passphrase, and import it on the other
+            machine. Its projects are added to the library there; if a name already exists, you choose to
+            replace, rename or skip it.</p>
+          </div></div>
+        </details>
+        <details class="row">
+          <summary><h3>Is it free?</h3><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>Yes. Envarsa is MIT-licensed and the source is on
+            <a href="https://github.com/terminalis/envarsa" rel="noopener">GitHub</a>. It&rsquo;s built with Rust
+            and Tauri&nbsp;2.</p>
+          </div></div>
+        </details>
+      </div>
     </div>
   </section>
 
   <!-- ================================================== download -->
   <section id="download" aria-labelledby="dl-h">
     <div class="container">
-      <p class="kicker"># download</p>
-      <h2 id="dl-h">Get Envarsa for Windows or Linux</h2>
-      <p class="lede"><strong>Windows:</strong> the Microsoft Store build is the easy path — signed (no SmartScreen prompt) and auto-updating. Want a direct download, or on Linux? Grab an artifact from the latest GitHub release below.</p>
-      <p class="dl-os">Windows</p>
+      <p class="label"># download</p>
+      <h2 id="dl-h">Download Envarsa</h2>
+
+      <p class="dl-os">Windows 10/11</p>
       <div class="dl-grid">
         <div class="dl-card">
           <h3>Microsoft Store</h3>
-          <p>One-click install, signed by the Store, and it updates itself.</p>
+          <p>The easiest option. Signed, and updates itself.</p>
           <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
         </div>
         <div class="dl-card">
           <h3>Installer</h3>
           <span class="file">Envarsa_x.y.z_x64-setup.exe</span>
-          <p>Installs for your user account — no admin needed. It doesn&rsquo;t update itself; turn on the update
-          check in Settings to hear about new releases.</p>
+          <p>Installs for your user account, no admin needed. It doesn&rsquo;t update itself; turn on the update
+          check in Settings to hear about new versions.</p>
           <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download installer</a>
         </div>
       </div>
+      <p class="dl-note">Both need the WebView2 runtime, which Windows&nbsp;11 and up-to-date Windows&nbsp;10 already have.</p>
+
       <p class="dl-os">Linux</p>
       <div class="dl-grid">
         <div class="dl-card">
           <h3>Flatpak</h3>
           <span class="file">Envarsa_x.y.z_x86_64.flatpak</span>
-          <p>Download the bundle, then run <code>flatpak install --user ./Envarsa_…_x86_64.flatpak</code> from the
-          download folder. It doesn&rsquo;t update itself until it&rsquo;s on Flathub. Uninstalling with
-          <code>flatpak uninstall --delete-data</code> also deletes your library — export a copy first.</p>
+          <p>Download it, then run <code>flatpak install --user ./Envarsa_x.y.z_x86_64.flatpak</code>. It
+          doesn&rsquo;t update itself yet. Uninstalling with <code>--delete-data</code> also deletes your library,
+          so export a copy first.</p>
           <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download Flatpak</a>
         </div>
       </div>
@@ -695,55 +462,20 @@ $ age -d envarsa.store &gt; store.json</code></pre>
 <footer>
   <div class="container">
     <div class="foot-row">
-      <a class="brand" href="#top" aria-label="Envarsa — back to top">
+      <a class="brand" href="#top" aria-label="Envarsa, back to top">
         <img src="/brand/mark.svg" width="22" height="22" alt="">
         Envarsa
       </a>
       <span>MIT licensed</span>
       <nav class="foot-links" aria-label="Footer">
-        <a href="/privacy.html">Privacy</a>
+        <a href="/privacy.html">Privacy policy</a>
         <a href="https://github.com/terminalis/envarsa" rel="noopener">Source</a>
         <a href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Releases</a>
         <a href="https://github.com/terminalis/envarsa/blob/main/LICENSE" rel="noopener">License</a>
         <a href="https://github.com/terminalis/envarsa/issues" rel="noopener">Issues</a>
       </nav>
     </div>
-    <p class="foot-tag"># no cloud · no telemetry · no egress by default</p>
   </div>
 </footer>
-
-<script>
-(function () {
-  var REVEAL_MS = 5000;
-  var rows = Array.prototype.slice.call(document.querySelectorAll('#envdemo .envrow'));
-  var timer = null;
-
-  function maskAll() {
-    if (timer) { clearTimeout(timer); timer = null; }
-    rows.forEach(function (row) {
-      row.classList.remove('revealed');
-      var btn = row.querySelector('.val');
-      btn.setAttribute('aria-pressed', 'false');
-      btn.querySelector('.vtext').textContent = '••••••••••';
-    });
-  }
-
-  rows.forEach(function (row) {
-    var btn = row.querySelector('.val');
-    btn.addEventListener('click', function () {
-      var wasRevealed = row.classList.contains('revealed');
-      maskAll(); // one value at a time, like the app
-      if (wasRevealed) return;
-      row.classList.add('revealed');
-      btn.setAttribute('aria-pressed', 'true');
-      btn.querySelector('.vtext').textContent = btn.dataset.value;
-      timer = setTimeout(maskAll, REVEAL_MS);
-    });
-  });
-
-  // mirror the app: hide on focus loss
-  window.addEventListener('blur', maskAll);
-})();
-</script>
 </body>
 </html>

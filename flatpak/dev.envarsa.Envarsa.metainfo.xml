@@ -47,20 +47,20 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>An empty library, ready for the first capture</caption>
-      <image>https://envarsa.dev/screenshots/screenshot-01.png</image>
+      <caption>A project open, with its keys listed and every value hidden</caption>
+      <image>https://envarsa.dev/screenshots/demo.png</image>
     </screenshot>
     <screenshot>
-      <caption>Capturing a snapshot from pasted lines</caption>
-      <image>https://envarsa.dev/screenshots/screenshot-02.png</image>
+      <caption>Looking back at an older snapshot of a project</caption>
+      <image>https://envarsa.dev/screenshots/feature-history.png</image>
     </screenshot>
     <screenshot>
-      <caption>Adding a project by hand</caption>
-      <image>https://envarsa.dev/screenshots/screenshot-03.png</image>
+      <caption>A key shared with two other projects, one with a different value</caption>
+      <image>https://envarsa.dev/screenshots/feature-shared.png</image>
     </screenshot>
     <screenshot>
-      <caption>Settings, with the store file and passphrase protection</caption>
-      <image>https://envarsa.dev/screenshots/screenshot-04.png</image>
+      <caption>Writing a .env.local from a project's .env.example</caption>
+      <image>https://envarsa.dev/screenshots/feature-write.png</image>
     </screenshot>
   </screenshots>
 
