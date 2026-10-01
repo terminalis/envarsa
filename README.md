@@ -13,12 +13,18 @@ Prereqs — **Windows:** Rust (`x86_64-pc-windows-gnu`, see note), Node, WebView
 ```
 npm install
 npm run dev      # tauri dev
-npm run build    # Windows: exe + NSIS · Linux: the app binary, no bundle
+npm run build    # Windows: exe + NSIS installer · Linux: compiles the app only
 cd src-tauri && cargo test     # includes every IPC command end to end
 bash tools/check-contract.sh   # the webview and the core agree on commands and events
 ```
 
-`ENVARSA_STORE_PATH` overrides the store location; `ENVARSA_DEMO=1` seeds sample projects. Serving `ui/` from
+After a Windows build, `tools/package-msix.ps1` packages the MSIX for the Microsoft Store. The Flatpak is built
+with flatpak-builder from `flatpak/`; [flatpak/README.md](flatpak/README.md) covers building, running and linting
+it locally.
+
+The store lives in the app's data folder: `%APPDATA%\com.envarsa.app\` on Windows (installer and Store),
+`~/.var/app/dev.envarsa.Envarsa/data/` in the Flatpak, and `~/.local/share/dev.envarsa.Envarsa/` for a Linux dev
+build. `ENVARSA_STORE_PATH` overrides it; `ENVARSA_DEMO=1` seeds sample projects. Serving `ui/` from
 any static server opens the UI in a plain browser against canned responses (`ui/js/mock.js`).
 
 The app version lives only in `src-tauri/Cargo.toml`; Tauri and the release workflow read it from there.
@@ -34,6 +40,15 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
 - **windows-gnu:** rustc must keep its self-contained linker — do **not** put `x86_64-w64-mingw32-gcc` on PATH
   (its CRT clashes with rustup's MinGW objects). The resource step needs binutils' `windres`/`dlltool`/`as`
   plus an *unprefixed* `gcc`; a stock MinGW-w64 with prefixed aliases removed satisfies both. MSVC needs none.
+
+## Distribution
+
+- **Windows installer:** `Envarsa_x.y.z_x64-setup.exe` on [GitHub Releases](https://github.com/terminalis/envarsa/releases/latest).
+- **Microsoft Store:** the MSIX from the release run, uploaded to Partner Center.
+- **Flatpak:** `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases now, and on Flathub once it passes review.
+
+A version tag runs `.github/workflows/release.yml`, which builds all three and publishes the installer and the
+bundle.
 
 ## Layout
 
