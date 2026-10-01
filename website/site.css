@@ -22,6 +22,7 @@
   --mask: #6b7388;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
   --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
   --radius: 9px;
   --shadow: 0 10px 36px rgba(0, 0, 0, 0.5);
 }
@@ -58,6 +59,8 @@ code {
   background: var(--panel-2); border: 1px solid var(--border-soft);
   border-radius: 5px; padding: 1px 6px;
 }
+
+h1, h2, h3 { font-family: var(--display); }
 
 /* ------------------------------------------------------------ header */
 
