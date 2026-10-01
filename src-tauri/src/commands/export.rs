@@ -1,5 +1,6 @@
 use super::session::check_passphrase;
-use super::{dialog_path, read_text_capped, with_store, R};
+use super::{dialog_path, host_path, read_text_capped, with_store, R};
+use crate::channel;
 use crate::crypto;
 use crate::envfile::{self, merge_with_report, AbsentPolicy, MergeReport};
 use crate::envpath::{classify_name, NameClass};
@@ -100,6 +101,10 @@ pub async fn export_store(
 // secrets would leak). The guard is enforced here on the final path; the
 // destination is staged behind an opaque token, so the webview never
 // supplies a path. The store is never touched — this is an export.
+//
+// In the sandbox a folder can only be written where the user chose the
+// file in a save dialog, so every destination comes from one: the
+// remembered folder only says where that dialog opens.
 
 /// The last check before any bytes are written. Run on the final resolved
 /// path, regardless of how it was chosen.
@@ -112,7 +117,11 @@ fn guard_writable_local(path: &Path) -> R<()> {
     }
 }
 
-fn stage_write(state: &State<'_, AppState>, path: PathBuf, template: Option<String>) -> R<String> {
+fn stage_write(
+    state: &State<'_, AppState>,
+    path: Option<PathBuf>,
+    template: Option<String>,
+) -> R<String> {
     state.with(|inner| Ok(inner.stage_write(path, template)))
 }
 
@@ -141,13 +150,17 @@ fn staged(state: &State<'_, AppState>, token: &str, merge: bool) -> R<(PathBuf, 
         let p = inner
             .pending_write(token)
             .ok_or("that write is no longer staged — choose the location again")?;
+        let path = p
+            .path
+            .clone()
+            .ok_or("choose where to write the .env.local first")?;
         let fill = match &p.template {
             Some(template) => Fill::Example {
                 template: template.clone(),
             },
             None => Fill::Snapshot { merge },
         };
-        Ok((p.path.clone(), fill))
+        Ok((path, fill))
     })
 }
 
@@ -237,18 +250,41 @@ pub struct WriteTarget {
     pub exists: bool,
 }
 
-/// Stage `path` as the target tab's write and describe it.
-pub(super) fn stage_target(state: &State<'_, AppState>, path: PathBuf) -> R<WriteTarget> {
+/// Stage `path` as the target tab's write and describe it. With
+/// `template`, it is the example tab's write instead. `host` is the path
+/// to show when it differs (`host_path`); the token keeps `path`, which
+/// is where the write goes.
+pub(super) fn stage_target(
+    state: &State<'_, AppState>,
+    path: PathBuf,
+    host: Option<&Path>,
+    template: Option<String>,
+) -> R<WriteTarget> {
+    let shown = host.unwrap_or(&path);
     Ok(WriteTarget {
         class: classify_name(&path),
         exists: path.exists(),
-        dir: path
+        dir: shown
             .parent()
             .map(|d| d.to_string_lossy().to_string())
             .unwrap_or_default(),
-        path: path.to_string_lossy().to_string(),
-        token: stage_write(state, path, None)?,
+        path: shown.to_string_lossy().to_string(),
+        token: stage_write(state, Some(path), template)?,
     })
+}
+
+/// What `stage_write_target` hands back: a staged default target, or in
+/// the sandbox only the folder the save dialog should open in.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum DefaultTarget {
+    Staged(WriteTarget),
+    /// Nothing is staged; the user picks the file, starting in `dir`.
+    #[serde(rename_all = "camelCase")]
+    PickRequired {
+        dir: String,
+        pick_required: bool,
+    },
 }
 
 #[derive(Serialize)]
@@ -263,19 +299,30 @@ pub struct WritePreview {
     pub blocked: Option<String>,
 }
 
-/// Stage the default target: `<remembered dir>/.env.local`. The dir is
-/// the folder of the file the snapshot was captured from (recorded by
-/// the core when that file was picked or dropped), else the project
-/// folder the user typed. Either way the dialog shows the path before
-/// anything is written, and the name guard still applies.
 #[tauri::command]
 pub fn stage_write_target(
     state: State<'_, AppState>,
     project_id: String,
     snapshot_id: String,
-) -> R<WriteTarget> {
-    let dir = with_store(&state, |store| {
-        let (project, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
+) -> R<DefaultTarget> {
+    let sandboxed = channel::current().sandboxed();
+    default_target(&state, &project_id, &snapshot_id, sandboxed)
+}
+
+/// Stage the default target: `<remembered dir>/.env.local`. The dir is
+/// the folder of the file the snapshot was captured from (recorded by
+/// the core when that file was picked or dropped), else the project
+/// folder the user typed. Either way the dialog shows the path before
+/// anything is written, and the name guard still applies. In the
+/// sandbox nothing is staged: the save dialog opens in that folder.
+pub(super) fn default_target(
+    state: &State<'_, AppState>,
+    project_id: &str,
+    snapshot_id: &str,
+    sandboxed: bool,
+) -> R<DefaultTarget> {
+    let dir = with_store(state, |store| {
+        let (project, snapshot) = store.find(project_id, Some(snapshot_id))?;
         let from_source = snapshot
             .source_path
             .as_deref()
@@ -287,18 +334,27 @@ pub fn stage_write_target(
                 .to_string()
         })
     })?;
-    stage_target(&state, dir.join(".env.local"))
+    if sandboxed {
+        return Ok(DefaultTarget::PickRequired {
+            dir: dir.to_string_lossy().to_string(),
+            pick_required: true,
+        });
+    }
+    stage_target(state, dir.join(".env.local"), None, None).map(DefaultTarget::Staged)
 }
 
-/// Redirect the target via a save dialog. `suggested_dir` only seeds the
+/// Choose the target in a save dialog. `suggested_dir` only seeds the
 /// dialog's starting folder; the staged path is the user's actual pick.
+/// With `example_token`, the pick becomes where that staged example is
+/// written (in the sandbox, the only way it gets a destination).
 #[tauri::command]
 pub async fn pick_write_target(
     app: AppHandle,
     state: State<'_, AppState>,
     suggested_dir: Option<String>,
+    example_token: Option<String>,
 ) -> R<Option<WriteTarget>> {
-    dialog_path(&app, move |d| {
+    let Some(path) = dialog_path(&app, move |d| {
         let mut d = d.set_title("Write .env.local").set_file_name(".env.local");
         if let Some(dir) = suggested_dir.as_deref() {
             d = d.set_directory(dir);
@@ -306,8 +362,35 @@ pub async fn pick_write_target(
         d.blocking_save_file()
     })
     .await?
-    .map(|path| stage_target(&state, path))
-    .transpose()
+    else {
+        return Ok(None);
+    };
+    // In the sandbox the pick is a Documents-portal path: the write goes
+    // there, but the host path is shown and seeds the next dialog.
+    let host = host_path(&path).await;
+    match example_token {
+        Some(token) => repoint_example(&state, &token, path, host.as_deref()),
+        None => stage_target(&state, path, host.as_deref(), None),
+    }
+    .map(Some)
+}
+
+/// Re-stage the example write `token` names at `path`, keeping its
+/// template. Like any pick, it replaces the example slot. `host` is the
+/// path to show, as for `stage_target`.
+pub(super) fn repoint_example(
+    state: &State<'_, AppState>,
+    token: &str,
+    path: PathBuf,
+    host: Option<&Path>,
+) -> R<WriteTarget> {
+    let template = state.with(|inner| {
+        inner
+            .pending_write(token)
+            .and_then(|p| p.template.clone())
+            .ok_or_else(|| "that example is no longer staged — choose it again".to_string())
+    })?;
+    stage_target(state, path, host, Some(template))
 }
 
 /// Preview either tab's staged write; the token's staged kind decides
@@ -342,47 +425,70 @@ pub struct ExampleStaged {
     pub token: String,
     pub example_name: String,
     /// Display only — the staged output path (`<example dir>/.env.local`).
-    pub out_path: String,
-    pub out_class: NameClass,
+    /// `None` when a pick is required.
+    pub out_path: Option<String>,
+    pub out_class: Option<NameClass>,
+    /// The example's folder on the host, where a required pick starts.
+    pub dir: Option<String>,
+    /// Sandboxed: the output is chosen with `pick_write_target`, passing
+    /// this token.
+    pub pick_required: bool,
     pub example_keys: Vec<String>,
 }
 
 /// Pick a `.env.example` to use as a template. Only its text is read; the
 /// staged write target is `<example dir>/.env.local` — the example path
-/// is never staged for writing.
+/// is never staged for writing. In the sandbox nothing is staged as a
+/// destination until `pick_write_target` is given the example's token.
 #[tauri::command]
 pub async fn pick_example_file(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> R<Option<ExampleStaged>> {
-    dialog_path(&app, |d| {
+    let Some(path) = dialog_path(&app, |d| {
         d.set_title("Choose a .env.example to use as a template")
             .blocking_pick_file()
     })
     .await?
-    .map(|path| stage_example(&state, &path))
-    .transpose()
+    else {
+        return Ok(None);
+    };
+    let host = host_path(&path).await;
+    let sandboxed = channel::current().sandboxed();
+    stage_example(&state, &path, host.as_deref(), sandboxed).map(Some)
 }
 
 /// Read the example at `path` and stage `<its dir>/.env.local` as the
-/// write it scaffolds.
-pub(super) fn stage_example(state: &State<'_, AppState>, path: &Path) -> R<ExampleStaged> {
+/// write it scaffolds. `host` is where the example lives on the host. In
+/// the sandbox the template is staged with no destination yet; the user
+/// picks it in a save dialog that starts in the example's folder.
+pub(super) fn stage_example(
+    state: &State<'_, AppState>,
+    path: &Path,
+    host: Option<&Path>,
+    sandboxed: bool,
+) -> R<ExampleStaged> {
     let template = read_text_capped(path)?;
     let example_name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
-    let out_path = path
-        .parent()
-        .map(|d| d.join(".env.local"))
-        .ok_or_else(|| "that file has no parent directory".to_string())?;
+    let dir = host.and_then(Path::parent);
+    let out_path = if sandboxed {
+        None
+    } else {
+        let dir = dir.ok_or_else(|| "that file has no parent directory".to_string())?;
+        Some(dir.join(".env.local"))
+    };
     let example_keys: Vec<String> = envfile::effective_entries(&envfile::parse(&template))
         .into_iter()
         .map(|(k, _)| k)
         .collect();
     Ok(ExampleStaged {
-        out_class: classify_name(&out_path),
-        out_path: out_path.to_string_lossy().to_string(),
+        out_class: out_path.as_deref().map(classify_name),
+        out_path: out_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+        dir: dir.map(|d| d.to_string_lossy().to_string()),
+        pick_required: sandboxed,
         token: stage_write(state, out_path, Some(template))?,
         example_name,
         example_keys,

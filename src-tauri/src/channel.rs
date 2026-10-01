@@ -28,7 +28,6 @@ impl Channel {
 
     /// Files outside the app's own folders are reachable only through
     /// portals. MSIX desktop apps are full-trust, so only the Flatpak.
-    #[allow(dead_code)] // no caller until the Flatpak's file handling
     pub fn sandboxed(self) -> bool {
         matches!(self, Channel::Flatpak)
     }

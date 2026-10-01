@@ -100,7 +100,7 @@ const COMMANDS = {
   pick_write_target: () => target,
   pick_example_file: () => ({
     token: 'mock-example', exampleName: '.env.example', outPath: `${DIR}\\.env.local`,
-    outClass: 'writable', exampleKeys: ['PORT', 'DATABASE_URL', 'MAILER_URL'],
+    outClass: 'writable', dir: DIR, pickRequired: false, exampleKeys: ['PORT', 'DATABASE_URL', 'MAILER_URL'],
   }),
   preview_write: ({ token }) => (token === 'mock-example' ? EXAMPLE_PREVIEW : PREVIEW),
   write_env_local: () => `${DIR}\\.env.local`,

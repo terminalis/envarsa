@@ -33,15 +33,15 @@ flowchart LR
 | File | What it owns |
 |---|---|
 | `main.rs` | Builds the app: plugins (single instance, dialog, opener), boot-time state, the drag-and-drop hook and the command list. It also sets the Windows title-bar colours. |
-| `state.rs` | Holds the in-memory state, meaning the session (unlocked, locked or corrupt), the config, and the tokens for picked files and write targets. It also resolves the store location (`ENVARSA_STORE_PATH`, then a location chosen in an earlier version, then app data), loads `config.json` forgivingly, and seeds demo data (`ENVARSA_DEMO`, from `demo.json`). |
+| `state.rs` | Holds the in-memory state, meaning the session (unlocked, locked or corrupt), the config, and the tokens for picked files and write targets. It also resolves the store location (`ENVARSA_STORE_PATH`, then a location chosen in an earlier version, then app data, which in the Flatpak is the sandbox's own data folder), loads `config.json` forgivingly, and seeds demo data (`ENVARSA_DEMO`, from `demo.json`). |
 | `store.rs` | Defines the store file: its format, serialization, `open` (plain or age), `save` with a `.bak`, `write_atomic`, `align_backup`, and `merge_import` for imports. |
 | `envfile.rs` | The `.env` line model (`Line`), which is also the editor's wire format. Covers parsing, serialization, value quoting, and the merge that writes `.env.local` and reports its changes in the same pass. |
 | `envpath.rs` | Classifies a file name as writable (`.env*.local`), an example (never written) or other, and gives the refusal text for the last two. |
 | `crypto.rs` | age passphrase encryption. An encrypted store is a plain age file. |
-| `clipboard.rs` | Copying a secret: Windows history and cloud exclusion, retry with backoff, and clearing after 30 s. |
+| `clipboard.rs` | Copying a secret and clearing it after 30 s. On Windows: history and cloud exclusion, and retry with backoff. On Linux: GTK's clipboard, where Envarsa serves the value itself. |
 | `channel.rs` | How this copy was installed (direct download, Microsoft Store or Flatpak), detected once. It answers whether updates come through a store and whether the app runs sandboxed. |
 | `update.rs` | The opt-in update check and the only network code. It holds the three update commands and the build's running version. |
-| `commands/mod.rs` | Plumbing shared by the commands: `with_store`, `mutate`, `dialog_path` and `read_text_capped`. |
+| `commands/mod.rs` | Plumbing shared by the commands: `with_store`, `mutate`, `dialog_path`, `host_path` and `read_text_capped`. |
 | `commands/session.rs` | Status, unlock, lock, the three protection changes (through `reprotect`) and restoring a backup. |
 | `commands/library.rs` | Listing, the project view with reuse badges, capture (from a paste, a picked file or a dropped file), the editor, project edits, delete, and restoring an older snapshot. |
 | `commands/secrets.rs` | Reveal, and copy to the clipboard. |
@@ -95,10 +95,11 @@ A user action goes around one loop. **Action, then state, then render:**
 
 `.env.local` writes and `config.json` also go through `write_atomic`.
 
-**Native dialogs** run on a worker thread through `dialog_path`. Cancelling returns `None`.
+**Native dialogs** run on a worker thread through `dialog_path`. Cancelling returns `None`. On Linux they go
+through the desktop portal, which is how the Flatpak sees the user's files.
 
 **Drag and drop** is a window event, not a command. Rust reads the dropped file, stages it, and emits a
-finished payload.
+finished payload. It does so in a task, because asking the Documents portal for the file's host path is async.
 
 ## Events
 
@@ -123,7 +124,7 @@ The webview never sends the core a filesystem path. When the user picks a file, 
 | `pending_source` | `pick_env_file`, drag and drop | `capture` (`sourceToken`), which records where the snapshot came from |
 | `pending_import` | `pick_import_store` | `inspect_import`, `apply_import` |
 | `pending_target` | `stage_write_target`, `pick_write_target` | `preview_write`, `write_env_local` |
-| `pending_example` | `pick_example_file`, which also holds the example's text | `preview_write`, `write_env_local` |
+| `pending_example` | `pick_example_file`, which also holds the example's text; `pick_write_target` with the example's token moves its destination | `preview_write`, `write_env_local` |
 
 Four rules apply to every slot:
 
@@ -137,6 +138,14 @@ Paths do travel the other way, for display. The one path the user types is the p
 which is plain text they own. `stage_write_target` uses it as a fallback for the default `.env.local`
 location. The dialog shows the resulting path, and the name guard still applies.
 
+**In the Flatpak** the sandbox can write a file only where the user chose it in a save dialog, so each write
+target comes from one. `stage_write_target` stages nothing and returns the remembered folder with
+`pickRequired`; `pick_example_file` stages the example's text with no destination yet. In both tabs
+`pick_write_target` then opens the save dialog in that folder with `.env.local` filled in. Picked and dropped
+files arrive as Documents-portal paths (`/run/user/<uid>/doc/<id>/<name>`), and are read and written
+there. The path shown is the host path the portal reports (`host_path`), or the portal path when it can't
+say. A snapshot's recorded source is that host path, or nothing when the portal can't say.
+
 ## Invariants
 
 These are the rules the code keeps. Refactors may change how one is enforced, never what it guarantees. Each
@@ -146,7 +155,7 @@ place that enforces a rule names it in a comment.
 |---|---|---|
 | **PATHS-STAY-IN-CORE** | Nothing is read, imported or written at a path the webview supplies. Picks and drops become tokens (see above). Two paths the webview does send never select a file: `pick_write_target`'s folder only sets where the dialog opens, and the project folder is text the user typed. | `state.rs` token slots; `commands/*` |
 | **VALUES-ON-REVEAL** | Listings carry keys and structure, never values. Malformed lines are masked too, since they may hold a secret. A value crosses on an explicit reveal, and into the editor when the user opens it (`edit_lines`). A copy goes from the core straight to the clipboard. | `library::get_project` (`LineView`), `secrets.rs` |
-| **CLIPBOARD-CLEARS** | A copied secret stays out of Windows clipboard history and the cloud clipboard, and is cleared after 30 s. The clear happens only if it is still the latest copy and the clipboard still holds it. | `clipboard.rs` |
+| **CLIPBOARD-CLEARS** | A copied secret stays out of Windows clipboard history and the cloud clipboard, and is cleared after 30 s. The clear happens only if it is still the latest copy and the clipboard still holds it. On Linux the copy goes through GTK's clipboard: Envarsa serves the value on each paste and stops after 30 s, so a later paste gets nothing even when Envarsa isn't focused. It clears the clipboard then only if it still owns it. | `clipboard.rs` |
 | **WRITES-ONLY-LOCAL** | The only file Envarsa writes into a project tree is a `.env*.local`, and only on an explicit write. It is checked on the final path, just before writing. An example file is only ever read. | `envpath.rs`, `export::guard_writable_local` |
 | **ATOMIC-WRITES** | The store, `config.json` and `.env.local` are written through a temp file, fsync and rename, so a crash can't leave a torn file. The store keeps a `.bak` of its previous version. | `store::write_atomic`, `store::save` |
 | **MEMORY-FOLLOWS-DISK** | The live store changes only after its save succeeds. A protection change adopts the new passphrase only after saving under it. | `commands::mutate`, `session::reprotect` |
@@ -166,7 +175,7 @@ Two more rules support these:
   arguments are decoded from the webview's JSON, and responses are checked as the JSON it receives. Native
   dialogs are stood in for by calling the staging function each dialog command uses.
 - **The clipboard test** is `#[ignore]` because it needs a desktop session. Run it with
-  `cargo test -- --ignored copy`.
+  `cargo test -- --ignored copy`; on Linux, `xvfb-run` provides one.
 - **`tools/check-contract.sh`** checks that both sides stay wired.
 - **The UI itself** can be clicked through in a plain browser against `mock.js`, or in the app with
   `ENVARSA_DEMO=1 npm run dev`.

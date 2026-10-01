@@ -4,8 +4,10 @@
 //!   1. `ENVARSA_STORE_PATH` env var (power users, tests)
 //!   2. `store_path` in the app config file (set through Settings by
 //!      earlier versions; Settings now only offers to move the store back)
-//!   3. the default location, `<app data dir>/envarsa.store`.
+//!   3. the default location, `<app data dir>/envarsa.store` (in the
+//!      Flatpak, the sandbox's own data dir).
 
+use crate::channel;
 use crate::store::{self, Opened, Snapshot, Store};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -38,10 +40,15 @@ pub struct Config {
 }
 
 pub fn config_file_path(app: &tauri::AppHandle) -> PathBuf {
-    app.path()
-        .app_config_dir()
-        .expect("app config dir resolves")
-        .join("config.json")
+    let path = app.path();
+    // A Flatpak's config dir is already its own, so the identifier
+    // subfolder app_config_dir adds would be redundant there.
+    let dir = if channel::current().sandboxed() {
+        path.config_dir()
+    } else {
+        path.app_config_dir()
+    };
+    dir.expect("config dir resolves").join("config.json")
 }
 
 /// A missing or unreadable config means defaults — it holds preferences,
@@ -98,15 +105,15 @@ impl Session {
 /// path.
 ///
 /// Invariant: PATHS-STAY-IN-CORE (ARCHITECTURE.md).
-pub struct PendingFile {
+pub struct PendingFile<P = PathBuf> {
     token: String,
-    path: PathBuf,
+    path: P,
 }
 
-impl PendingFile {
+impl<P> PendingFile<P> {
     /// Stage `path` in `slot`, replacing whatever was there, and return
     /// the new token.
-    fn stage(slot: &mut Option<PendingFile>, path: PathBuf) -> String {
+    fn stage(slot: &mut Option<Self>, path: P) -> String {
         let token = store::new_id();
         *slot = Some(PendingFile {
             token: token.clone(),
@@ -115,10 +122,8 @@ impl PendingFile {
         token
     }
 
-    fn path_for<'a>(slot: &'a Option<PendingFile>, token: &str) -> Option<&'a Path> {
-        slot.as_ref()
-            .filter(|p| p.token == token)
-            .map(|p| p.path.as_path())
+    fn path_for<'a>(slot: &'a Option<Self>, token: &str) -> Option<&'a P> {
+        slot.as_ref().filter(|p| p.token == token).map(|p| &p.path)
     }
 }
 
@@ -129,7 +134,9 @@ impl PendingFile {
 /// scaffold for the merge; the example file itself is only ever read.
 pub struct PendingWrite {
     token: String,
-    pub path: PathBuf,
+    /// `None` only for an example staged in the sandbox, until the user
+    /// picks where to write it in a save dialog.
+    pub path: Option<PathBuf>,
     pub template: Option<String>,
 }
 
@@ -146,7 +153,9 @@ pub struct Inner {
     pending_import: Option<PendingFile>,
     /// The `.env` file last picked or dropped for capture, so a capture
     /// can record where it came from without the webview sending a path.
-    pending_source: Option<PendingFile>,
+    /// It holds the file's host path, or `None` when the Documents
+    /// portal couldn't give one; nothing is recorded then.
+    pending_source: Option<PendingFile<Option<PathBuf>>>,
     /// The write modal's two tabs each keep one staged `.env.local`
     /// write: a plain target, and an example scaffold (`template` set).
     /// A new pick replaces only its own kind, so choosing an example
@@ -183,20 +192,22 @@ impl Inner {
     }
 
     pub fn pending_import(&self, token: &str) -> Option<&Path> {
-        PendingFile::path_for(&self.pending_import, token)
+        PendingFile::path_for(&self.pending_import, token).map(PathBuf::as_path)
     }
 
-    /// Stage a picked or dropped `.env` file as a capture's source.
-    pub fn stage_source(&mut self, path: PathBuf) -> String {
-        PendingFile::stage(&mut self.pending_source, path)
+    /// Stage a picked or dropped `.env` file as a capture's source, by
+    /// the host path to record for it.
+    pub fn stage_source(&mut self, host: Option<PathBuf>) -> String {
+        PendingFile::stage(&mut self.pending_source, host)
     }
 
-    pub fn pending_source(&self, token: &str) -> Option<&Path> {
-        PendingFile::path_for(&self.pending_source, token)
+    /// The staged source's host path to record, if the token matches.
+    pub fn pending_source(&self, token: &str) -> Option<Option<&Path>> {
+        PendingFile::path_for(&self.pending_source, token).map(Option::as_deref)
     }
 
     /// Stage a write and return its token.
-    pub fn stage_write(&mut self, path: PathBuf, template: Option<String>) -> String {
+    pub fn stage_write(&mut self, path: Option<PathBuf>, template: Option<String>) -> String {
         let token = store::new_id();
         let slot = if template.is_some() {
             &mut self.pending_example
@@ -243,12 +254,18 @@ impl AppState {
 }
 
 /// Where the store lives unless something overrides it:
-/// `<app data dir>/envarsa.store`.
+/// `<app data dir>/envarsa.store`, or `<data dir>/envarsa.store` in the
+/// Flatpak.
 pub fn default_store_path(app: &tauri::AppHandle) -> PathBuf {
-    app.path()
-        .app_data_dir()
-        .expect("app data dir resolves")
-        .join("envarsa.store")
+    let path = app.path();
+    // A Flatpak's data dir is already its own (~/.var/app/<id>/data), so
+    // the identifier subfolder app_data_dir adds would be redundant there.
+    let dir = if channel::current().sandboxed() {
+        path.data_dir()
+    } else {
+        path.app_data_dir()
+    };
+    dir.expect("data dir resolves").join("envarsa.store")
 }
 
 pub fn resolve_store_path(app: &tauri::AppHandle, config: &Config) -> (PathBuf, bool) {
@@ -569,8 +586,11 @@ mod tests {
     fn capture_sources_and_imports_stage_separately() {
         let mut i = inner();
         let import = i.stage_import(PathBuf::from("/a.store"));
-        let source = i.stage_source(PathBuf::from("/app/.env"));
-        assert_eq!(i.pending_source(&source), Some(Path::new("/app/.env")));
+        let source = i.stage_source(Some(PathBuf::from("/app/.env")));
+        assert_eq!(
+            i.pending_source(&source),
+            Some(Some(Path::new("/app/.env")))
+        );
         assert!(
             i.pending_import(&import).is_some(),
             "a capture pick keeps the import"
@@ -579,9 +599,13 @@ mod tests {
             i.pending_source(&import).is_none(),
             "tokens don't cross kinds"
         );
-        let next = i.stage_source(PathBuf::from("/web/.env"));
+        let next = i.stage_source(None);
         assert!(i.pending_source(&source).is_none(), "old pick replaced");
-        assert_eq!(i.pending_source(&next), Some(Path::new("/web/.env")));
+        assert_eq!(
+            i.pending_source(&next),
+            Some(None),
+            "staged, with no host path to record"
+        );
     }
 
     /// The write modal's two tabs stage independently: picking on one
@@ -589,10 +613,10 @@ mod tests {
     #[test]
     fn target_and_example_writes_stay_staged_side_by_side() {
         let mut i = inner();
-        let target = i.stage_write(PathBuf::from("/app/.env.local"), None);
-        let example = i.stage_write(PathBuf::from("/tpl/.env.local"), Some("A=\n".into()));
+        let target = i.stage_write(Some(PathBuf::from("/app/.env.local")), None);
+        let example = i.stage_write(Some(PathBuf::from("/tpl/.env.local")), Some("A=\n".into()));
         assert_eq!(
-            i.pending_write(&target).map(|p| p.path.clone()),
+            i.pending_write(&target).and_then(|p| p.path.clone()),
             Some(PathBuf::from("/app/.env.local")),
             "picking an example keeps the staged target"
         );
@@ -603,7 +627,7 @@ mod tests {
 
         // The other order: re-staging the target keeps the example, and
         // replaces only the previous target.
-        let target2 = i.stage_write(PathBuf::from("/other/.env.local"), None);
+        let target2 = i.stage_write(Some(PathBuf::from("/other/.env.local")), None);
         assert!(i.pending_write(&example).is_some(), "example kept");
         assert!(i.pending_write(&target).is_none(), "old target replaced");
         assert!(i.pending_write(&target2).is_some());
@@ -613,8 +637,8 @@ mod tests {
     #[test]
     fn a_finished_write_clears_every_staged_write() {
         let mut i = inner();
-        let target = i.stage_write(PathBuf::from("/app/.env.local"), None);
-        let example = i.stage_write(PathBuf::from("/tpl/.env.local"), Some(String::new()));
+        let target = i.stage_write(Some(PathBuf::from("/app/.env.local")), None);
+        let example = i.stage_write(Some(PathBuf::from("/tpl/.env.local")), Some(String::new()));
         i.clear_pending_writes();
         assert!(i.pending_write(&target).is_none());
         assert!(i.pending_write(&example).is_none());

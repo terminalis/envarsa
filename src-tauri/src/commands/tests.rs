@@ -206,7 +206,8 @@ fn a_picked_file_is_captured_by_token_never_by_path() {
     let file = dir.join(".env");
     fs::write(&file, "PORT=1\n").unwrap();
 
-    let picked = to_json(&library::stage_env_file(&env.state(), &file).unwrap());
+    let picked =
+        to_json(&library::stage_env_file(&env.state(), &file, Some(file.clone())).unwrap());
     assert_eq!(picked["text"], "PORT=1\n");
     assert_eq!(picked["nameGuess"], "web");
     let token = picked["token"].as_str().unwrap();
@@ -219,11 +220,55 @@ fn a_picked_file_is_captured_by_token_never_by_path() {
 
     // The source decides where a write goes by default, so only a token
     // the core minted is accepted, and a new pick replaces the last one.
-    library::stage_env_file(&env.state(), &file).unwrap();
+    library::stage_env_file(&env.state(), &file, Some(file.clone())).unwrap();
     let args = json!({ "projectName": "web", "text": "A=1\n", "sourceToken": token });
     let err = library::capture(env.state(), decode(args)).refused();
     assert!(err.contains("no longer staged"), "{err}");
     assert_eq!(env.project("web")["snapshotCount"], 1, "nothing captured");
+}
+
+/// In the Flatpak a picked file is read through the Documents portal,
+/// and its host path is what gets recorded. When the portal can't say,
+/// the file is still captured, with no source and no guesses.
+#[test]
+fn a_file_with_no_known_host_path_is_captured_without_a_source() {
+    let env = Env::new("cmd-source-unknown");
+    let file = env.path(".env");
+    fs::write(&file, "PORT=1\n").unwrap();
+
+    let picked = to_json(&library::stage_env_file(&env.state(), &file, None).unwrap());
+    assert_eq!(
+        picked["path"],
+        file.to_string_lossy().as_ref(),
+        "shown as read"
+    );
+    assert_eq!(picked["dir"], Value::Null);
+    assert_eq!(picked["nameGuess"], Value::Null);
+    let args = json!({ "projectName": "web", "text": "PORT=1\n", "sourceToken": picked["token"] });
+    let r = library::capture(env.state(), decode(args)).unwrap();
+    assert_eq!(env.view(&r.project_id, None)["via"], "file");
+    assert_eq!(
+        env.on_disk().projects[0].latest().unwrap().source_path,
+        None
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_documents_portal_path_names_its_document() {
+    use std::path::Path;
+    fn id(p: &str) -> Option<&str> {
+        super::doc_id(Path::new(p))
+    }
+    assert_eq!(id("/run/user/1000/doc/ab12cd34/.env"), Some("ab12cd34"));
+    assert_eq!(id("/home/me/app/.env"), None);
+    assert_eq!(
+        id("/run/user/1000/doc/ab12cd34"),
+        None,
+        "a document, not a file"
+    );
+    assert_eq!(id("/run/user/1000/doc/ab12cd34/app/.env"), None);
+    assert_eq!(id("/run/user/1000/other/ab12cd34/.env"), None);
 }
 
 // ------------------------------------------------------- listing & reveal
@@ -296,29 +341,50 @@ fn keys_reused_across_projects_are_flagged_as_same_or_different() {
 }
 
 /// Copying hands a value from the core straight to the OS clipboard.
-/// Needs a clipboard that keeps its contents (a desktop session), so it
-/// is ignored by default: `cargo test -- --ignored copy`.
+/// Needs a desktop session, so it is ignored by default:
+/// `cargo test -- --ignored copy`. On Linux Envarsa serves the copy
+/// itself, so it is gone once the test exits.
 #[test]
 #[ignore = "needs a desktop clipboard"]
 fn copy_puts_the_value_or_the_raw_block_on_the_clipboard() {
+    // This thread stands in for the app's main thread, where GTK runs.
+    #[cfg(target_os = "linux")]
+    gtk::init().unwrap();
     let env = Env::new("cmd-copy");
     let a = env.capture("alpha", ALPHA);
     let b = env.capture("beta", BETA);
-    let read = || arboard::Clipboard::new().unwrap().get_text().unwrap();
+    #[cfg(windows)]
     let original = arboard::Clipboard::new()
         .and_then(|mut c| c.get_text())
         .ok();
 
     let key = secrets::copy_value(env.state(), a.project_id, a.snapshot_id, 1).unwrap();
     assert_eq!(key, "DATABASE_URL");
-    assert_eq!(read(), "postgres://u:p@localhost/db");
+    assert_eq!(pasted(), "postgres://u:p@localhost/db");
     let n = secrets::copy_block(env.state(), b.project_id, b.snapshot_id).unwrap();
     assert_eq!(n, 3);
-    assert_eq!(read(), BETA, "the block is the raw snapshot, byte for byte");
+    assert_eq!(
+        pasted(),
+        BETA,
+        "the block is the raw snapshot, byte for byte"
+    );
 
+    #[cfg(windows)]
     if let Some(text) = original {
         let _ = arboard::Clipboard::new().and_then(|mut c| c.set_text(text));
     }
+}
+
+/// The clipboard's text, read the way another app would paste it.
+#[cfg(windows)]
+fn pasted() -> String {
+    arboard::Clipboard::new().unwrap().get_text().unwrap()
+}
+
+#[cfg(target_os = "linux")]
+fn pasted() -> String {
+    let clipboard = gtk::Clipboard::get(&gtk::gdk::SELECTION_CLIPBOARD);
+    clipboard.wait_for_text().unwrap().into()
 }
 
 #[test]
@@ -659,7 +725,7 @@ fn moving_the_store_never_overwrites_a_file_at_the_default() {
 
 /// Stage `name` in the env's folder as the target tab's write.
 fn target(env: &Env, name: &str) -> Value {
-    to_json(&export::stage_target(&env.state(), env.path(name)).unwrap())
+    to_json(&export::stage_target(&env.state(), env.path(name), None, None).unwrap())
 }
 
 fn token(staged: &Value) -> String {
@@ -763,13 +829,15 @@ fn an_example_scaffold_fills_values_and_never_leaks_placeholders() {
     let template = "# API config\nAPI_KEY=put-your-key-here\nPORT=8080\nUNUSED=placeholder-value\n";
     fs::write(&example, template).unwrap();
 
-    let staged = to_json(&export::stage_example(&env.state(), &example).unwrap());
+    let staged =
+        to_json(&export::stage_example(&env.state(), &example, Some(&example), false).unwrap());
     assert_eq!(staged["exampleName"], ".env.example");
     assert_eq!(
         staged["outPath"],
         dir.join(".env.local").to_string_lossy().as_ref()
     );
     assert_eq!(staged["outClass"], "writable");
+    assert_eq!(staged["pickRequired"], false);
     assert_eq!(staged["exampleKeys"], json!(["API_KEY", "PORT", "UNUSED"]));
 
     // The staged kind decides the fill; `merge` only applies to a target.
@@ -805,7 +873,7 @@ fn the_target_and_example_tabs_stage_independently() {
     fs::write(&example, "# tpl\nPORT=1\n").unwrap();
     let stage_example = || {
         token(&to_json(
-            &export::stage_example(&env.state(), &example).unwrap(),
+            &export::stage_example(&env.state(), &example, Some(&example), false).unwrap(),
         ))
     };
 
@@ -825,6 +893,88 @@ fn the_target_and_example_tabs_stage_independently() {
 
     // A finished write closes the dialog, so the other staged write goes.
     let err = write(&env, &snap, &t2, false).refused();
+    assert!(err.contains("no longer staged"), "{err}");
+}
+
+/// The project folder remembered from the snapshot's source decides
+/// the default target. In the sandbox it only says where the save
+/// dialog opens: nothing is staged until the user picks the file.
+#[test]
+fn the_sandbox_stages_no_default_target_and_says_where_to_pick() {
+    let env = Env::new("cmd-write-sandbox");
+    let snap = env.capture("app", WRITE);
+    let dir = env.path("app");
+    let hint = dir.to_string_lossy().to_string();
+    library::update_project(env.state(), snap.project_id.clone(), "app".into(), hint).unwrap();
+    let default = |sandboxed| {
+        to_json(
+            &export::default_target(&env.state(), &snap.project_id, &snap.snapshot_id, sandboxed)
+                .unwrap(),
+        )
+    };
+
+    let staged = default(false);
+    assert_eq!(
+        staged["path"],
+        dir.join(".env.local").to_string_lossy().as_ref()
+    );
+    assert!(staged["token"].is_string());
+
+    let pick = default(true);
+    assert_eq!(
+        pick,
+        json!({ "dir": dir.to_string_lossy(), "pickRequired": true })
+    );
+
+    // The save dialog's pick stages the target like any other.
+    let t = target(&env, "app/.env.local");
+    write(&env, &snap, &token(&t), false).unwrap();
+    assert_eq!(read(&env, "app/.env.local"), WRITE);
+}
+
+/// In the sandbox an example can't be written beside itself: its
+/// template is staged, and the save dialog's pick re-points it. The
+/// name guard runs on the picked path like on any other.
+#[test]
+fn a_sandboxed_example_is_written_where_the_user_picks() {
+    let env = Env::new("cmd-write-sandbox-example");
+    let snap = env.capture("app", WRITE);
+    let dir = env.path("tpl");
+    fs::create_dir_all(&dir).unwrap();
+    let example = dir.join(".env.example");
+    fs::write(&example, "# tpl\nPORT=1\n").unwrap();
+
+    let staged =
+        to_json(&export::stage_example(&env.state(), &example, Some(&example), true).unwrap());
+    assert_eq!(staged["pickRequired"], true);
+    assert_eq!(staged["outPath"], Value::Null);
+    assert_eq!(staged["dir"], dir.to_string_lossy().as_ref());
+    assert_eq!(staged["exampleKeys"], json!(["PORT"]));
+    let err = write(&env, &snap, &token(&staged), false).refused();
+    assert!(err.contains("choose where to write"), "{err}");
+
+    let repoint = |token: &str, name: &str| {
+        export::repoint_example(&env.state(), token, env.path(name), None)
+    };
+    let blocked = to_json(&repoint(&token(&staged), ".env.example").unwrap());
+    assert_eq!(blocked["class"], "example");
+    assert!(preview(&env, &snap, &token(&blocked), false)["blocked"].is_string());
+    assert!(write(&env, &snap, &token(&blocked), false).is_err());
+    assert!(
+        !env.path(".env.example").exists(),
+        "the guard still applies"
+    );
+
+    // Each pick replaces the example slot, template and all.
+    let err = repoint(&token(&staged), ".env.local").refused();
+    assert!(err.contains("no longer staged"), "{err}");
+    let picked = to_json(&repoint(&token(&blocked), ".env.local").unwrap());
+    write(&env, &snap, &token(&picked), false).unwrap();
+    assert!(read(&env, ".env.local").starts_with("# tpl\nPORT=3000\n"));
+
+    // A plain target has no template to re-point.
+    let t = target(&env, ".env.local");
+    let err = repoint(&token(&t), ".env.local").refused();
     assert!(err.contains("no longer staged"), "{err}");
 }
 

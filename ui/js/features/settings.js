@@ -121,6 +121,7 @@ function settingsModal(S, m) {
     <section>
       <h3>Store file</h3>
       <p class="mono settings-path" title="${esc(st.storePath)}">${esc(st.storePath)}</p>
+      ${st.channel === 'flatpak' ? '<p class="hint warn">Uninstalling with <span class="mono">flatpak uninstall --delete-data</span> also deletes this library — export a copy first.</p>' : ''}
       ${st.envOverride ? '<p class="hint warn">Location forced by <span class="mono">ENVARSA_STORE_PATH</span> for this run.</p>' : ''}
       ${st.customLocation ? `
       <p class="hint">This library lives at a location chosen in an earlier version.</p>
