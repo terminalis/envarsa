@@ -3,7 +3,7 @@
 A local-first store for your `.env` files — capture, recall masked, hand back by clipboard or export. One
 JSON file on disk; no cloud, no telemetry, no egress except an opt-in update check (off by default).
 
-[Download](https://github.com/terminalis/envarsa/releases/latest) · [Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M) · [envarsa.dev](https://envarsa.dev)
+[Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M) · [Flatpak](https://github.com/terminalis/envarsa/releases/latest)
 
 ## Build
 
