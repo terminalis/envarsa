@@ -1,9 +1,11 @@
 # Checks every pull request before review: formatting, the Rust test suite,
 # and the IPC contract between the webview and the Rust core.
 #
-# `check` runs on ubuntu-22.04 to match the Linux release build (see
-# release.yml), with the README's Linux prerequisites. It uses the runner's
-# preinstalled stable Rust, which includes rustfmt, the same as release.yml.
+# `check` runs on ubuntu-22.04 with the README's Linux prerequisites, the same
+# setup as release.yml's `test-linux`, so a release reruns exactly what pull
+# requests passed. It uses the runner's preinstalled stable Rust, which
+# includes rustfmt, the same as release.yml. The Flatpak itself builds in the
+# GNOME runtime instead (flatpak.yml).
 #
 # `test-windows` runs the same test suite on the windows-gnu toolchain the
 # release uses, so Windows-only code (#[cfg(windows)]: the clipboard history

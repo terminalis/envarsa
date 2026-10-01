@@ -1,10 +1,15 @@
-# Builds the Windows and Linux artifacts and publishes them to a GitHub
-# Release.
+# Builds the release artifacts and publishes them to a GitHub Release: the
+# Windows NSIS installer and the Linux Flatpak bundle. The MSIX for the
+# Microsoft Store is built alongside and kept as a workflow artifact.
 #
 # Triggers on version tags (v0.1.0, v1.2.3, ...): push the tag and the release
-# appears with the NSIS installer attached. A manual run (workflow_dispatch)
-# builds the same artifacts and attaches them to the run for inspection without
-# creating a release.
+# appears with the installer and the bundle attached. A manual run
+# (workflow_dispatch) builds the same artifacts and attaches them to the run
+# for inspection without creating a release.
+#
+# `version` refuses a tag that doesn't match Cargo.toml, and any version
+# without a <release> entry in the Flatpak metainfo: AppStream lists each
+# release with its date, and Flathub shows them.
 #
 # The Windows build mirrors the local setup from the README's windows-gnu
 # note: gnu host toolchain, stock MinGW-w64 binutils on PATH, and the prefixed
@@ -14,9 +19,9 @@
 # where the resource path expects — nothing else creates that file on a clean
 # checkout.
 #
-# The Linux job only runs the engine tests and the GLib backport test: the
-# AppImage and .deb are gone, and the Flatpak build that replaces them is yet
-# to come.
+# `test-linux` runs the engine tests, and the GLib backport test with release
+# optimisations, on the same setup as ci.yml. `build-flatpak` is flatpak.yml,
+# which builds the bundle in Flathub's CI image and lints it.
 
 name: release
 
@@ -53,6 +58,15 @@ jobs:
         run: |
           if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
             echo "tag $GITHUB_REF_NAME does not match Cargo.toml version v$VERSION" >&2
+            exit 1
+          fi
+
+      - name: Fail if the Flatpak metainfo has no entry for this version
+        env:
+          VERSION: ${{ steps.read.outputs.version }}
+        run: |
+          if ! grep -qF "<release version=\"$VERSION\"" flatpak/dev.envarsa.Envarsa.metainfo.xml; then
+            echo "flatpak/dev.envarsa.Envarsa.metainfo.xml has no <release version=\"$VERSION\"> entry" >&2
             exit 1
           fi
 
@@ -95,7 +109,7 @@ jobs:
           name: envarsa-msix-x64
           path: out/Envarsa_*.msix
 
-  build-linux:
+  test-linux:
     runs-on: ubuntu-22.04
     needs: version
     timeout-minutes: 60
@@ -109,22 +123,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev librsvg2-dev libssl-dev xdg-utils
+            libxdo-dev librsvg2-dev libssl-dev
 
       - name: Run engine tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml
 
       - name: Test GLib security backport with release optimizations
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --release --test glib_variant_str_iter
 
+  build-flatpak:
+    needs: version
+    uses: ./.github/workflows/flatpak.yml
+
   publish:
     runs-on: ubuntu-latest
-    needs: [version, build-windows, build-linux]
+    needs: [version, build-windows, test-linux, build-flatpak]
     if: github.ref_type == 'tag'
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
+      # An upload keeps only the folders after its path's first wildcard, so
+      # the installer and the bundle both sit at the top of dist/.
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -136,5 +156,6 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            dist/nsis/*-setup.exe \
+            dist/*-setup.exe \
+            dist/*_x86_64.flatpak \
             --verify-tag --generate-notes --title "Envarsa $VERSION"
