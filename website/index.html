@@ -187,18 +187,42 @@
 
   /* --------------------------------------------------------- download */
 
-  .dl-os { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 32px 0 12px; }
-  .dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 32px; }
   .dl-card {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 12px; padding: 24px;
-    display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
+    display: flex; flex-direction: column; gap: 10px; min-width: 0;
   }
   .dl-card h3 { margin: 0; font-size: 18px; }
-  .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
-  .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 15px; flex: 1; }
-  .dl-card code { overflow-wrap: anywhere; }
-  .dl-note { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
+  .dl-card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .dl-cmd-wrap {
+    display: flex; align-items: center;
+    background: var(--bg); border: 1px solid var(--border-soft); border-radius: 8px;
+  }
+  .dl-cmd {
+    flex: 1; min-width: 0; margin: 0; padding: 11px 0 11px 14px; overflow-x: auto;
+    font-family: var(--mono); font-size: 13px; line-height: 1.5; color: var(--text);
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  .dl-cmd::-webkit-scrollbar { display: none; }
+  .dl-cmd::before { content: "$ "; color: var(--faint); user-select: none; }
+  .dl-cmd code { background: none; border: 0; padding: 0; font-size: inherit; white-space: pre; }
+  .copy-btn {
+    flex: none; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+    background: none; border: 0; border-radius: 0 8px 8px 0;
+    color: var(--faint); cursor: pointer;
+  }
+  .copy-btn:hover { color: var(--text); }
+  .copy-btn:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: -2px; }
+  .copy-btn svg { width: 15px; height: 15px; }
+  .copy-btn .done, .copy-btn.copied .idle { display: none; }
+  .copy-btn.copied .done { display: block; color: var(--good); }
+  .dl-warn { display: flex; gap: 8px; margin: 16px 0 0; color: var(--muted); font-size: 14px; }
+  .dl-warn svg { flex: none; width: 16px; height: 16px; margin-top: 3px; color: var(--accent); }
+  .dl-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 8px; }
+  .dl-card .btn-ghost { background: var(--panel-2); }
 
   /* ------------------------------------------------------- responsive */
 
@@ -426,34 +450,36 @@
       <p class="label"># download</p>
       <h2 id="dl-h">Download Envarsa</h2>
 
-      <p class="dl-os">Windows 10/11</p>
       <div class="dl-grid">
         <div class="dl-card">
-          <h3>Microsoft Store</h3>
-          <p>The easiest option. Signed, and updates itself.</p>
-          <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Get it from the Microsoft Store</a>
+          <h3>Windows 10/11</h3>
+          <p>The Microsoft Store version is signed and updates itself. The installer needs no admin rights but
+          doesn&rsquo;t update itself; turn on the update check in Settings to hear about new versions.</p>
+          <div class="dl-btns">
+            <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Microsoft Store</a>
+            <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Installer</a>
+          </div>
         </div>
         <div class="dl-card">
-          <h3>Installer</h3>
-          <span class="file">Envarsa_x.y.z_x64-setup.exe</span>
-          <p>Installs for your user account, no admin needed. It doesn&rsquo;t update itself; turn on the update
-          check in Settings to hear about new versions.</p>
-          <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download installer</a>
+          <h3>Linux</h3>
+          <p>Download the bundle, then install it from the folder you saved it to. Updates must be
+          installed manually.</p>
+          <div class="dl-cmd-wrap">
+            <pre class="dl-cmd"><code id="flatpak-cmd">flatpak install --user ./Envarsa_x.y.z_x86_64.flatpak</code></pre>
+            <button class="copy-btn" type="button" data-copy="flatpak-cmd" aria-label="Copy command" title="Copy" hidden>
+              <svg class="idle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <svg class="done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            </button>
+          </div>
+          <div class="dl-btns">
+            <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Flatpak</a>
+          </div>
         </div>
       </div>
-      <p class="dl-note">Both need the WebView2 runtime, which Windows&nbsp;11 and up-to-date Windows&nbsp;10 already have.</p>
-
-      <p class="dl-os">Linux</p>
-      <div class="dl-grid">
-        <div class="dl-card">
-          <h3>Flatpak</h3>
-          <span class="file">Envarsa_x.y.z_x86_64.flatpak</span>
-          <p>Download it, then run <code>flatpak install --user ./Envarsa_x.y.z_x86_64.flatpak</code>. It
-          doesn&rsquo;t update itself yet. Uninstalling with <code>--delete-data</code> also deletes your library,
-          so export a copy first.</p>
-          <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Download Flatpak</a>
-        </div>
-      </div>
+      <p class="dl-warn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <span><span class="sr-only">Warning: </span>Always remember to export a copy of your library before uninstalling the program.</span>
+      </p>
     </div>
   </section>
 
@@ -477,5 +503,24 @@
     </div>
   </div>
 </footer>
+
+<script>
+  // Copy buttons appear only where the Clipboard API is available.
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    if (!navigator.clipboard) return;
+    btn.hidden = false;
+    btn.addEventListener('click', function () {
+      var text = document.getElementById(btn.dataset.copy).textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.classList.add('copied');
+        btn.setAttribute('aria-label', 'Copied');
+        setTimeout(function () {
+          btn.classList.remove('copied');
+          btn.setAttribute('aria-label', 'Copy command');
+        }, 1500);
+      });
+    });
+  });
+</script>
 </body>
 </html>
