@@ -120,7 +120,6 @@ function settingsModal(S, m) {
         <button class="btn" data-act="open-export-store"><span class="btn-ic">${ICONS.download}</span>Export…</button>
         <button class="btn" data-act="open-import-store">Import…</button>
       </div>
-      ${st.portable ? '<p class="hint">Portable build: the store and your settings live in this folder, so they travel with it. <strong>Change location&hellip;</strong> can move the store elsewhere, but a spot outside this folder will not travel when you move the folder.</p>' : ''}
     </section>
     <section>
       <h3>Protection</h3>

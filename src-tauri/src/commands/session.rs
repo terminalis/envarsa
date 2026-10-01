@@ -24,11 +24,6 @@ pub struct StatusPayload {
     pub store_path: String,
     pub encrypted: bool,
     pub env_override: bool,
-    /// True for the portable build (an `envarsa.portable` marker sits beside
-    /// the exe): the store and config default into that folder, so they
-    /// travel with it. Lets the UI warn that relocating the store *outside*
-    /// the folder un-anchors it from the portable bundle.
-    pub portable: bool,
     pub backup_exists: bool,
     pub project_count: Option<usize>,
     pub error: Option<String>,
@@ -62,7 +57,6 @@ fn status_of(inner: &Inner) -> StatusPayload {
         store_path: inner.store_path.to_string_lossy().to_string(),
         encrypted,
         env_override: inner.env_override,
-        portable: crate::state::portable_base().is_some(),
         backup_exists: store::backup_path(&inner.store_path).exists(),
         project_count,
         error,

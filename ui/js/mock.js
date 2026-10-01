@@ -64,7 +64,7 @@ const COMMANDS = {
   store_status: () => ({
     state: S.locked ? 'locked' : 'unlocked',
     storePath: 'C:\\Users\\you\\AppData\\Roaming\\com.envarsa.app\\envarsa.store',
-    encrypted: S.encrypted, envOverride: false, portable: false, backupExists: true,
+    encrypted: S.encrypted, envOverride: false, backupExists: true,
     projectCount: PROJECTS.length, error: null, appVersion: '0.1.0-mock',
     updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, packaged: false,
   }),

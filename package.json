@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "package:portable": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/package-portable.ps1",
     "tauri": "tauri"
   },
   "devDependencies": {

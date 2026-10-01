@@ -13,7 +13,7 @@ Prereqs — **Windows:** Rust (`x86_64-pc-windows-gnu`, see note), Node, WebView
 ```
 npm install
 npm run dev      # tauri dev
-npm run build    # Windows: exe + NSIS · Linux: AppImage + .deb
+npm run build    # Windows: exe + NSIS · Linux: the app binary, no bundle
 cd src-tauri && cargo test     # includes every IPC command end to end
 bash tools/check-contract.sh   # the webview and the core agree on commands and events
 ```

@@ -33,7 +33,7 @@ flowchart LR
 | File | What it owns |
 |---|---|
 | `main.rs` | Builds the app: plugins (single instance, dialog, opener), boot-time state, the drag-and-drop hook and the command list. It also sets the Windows title-bar colours. |
-| `state.rs` | Holds the in-memory state, meaning the session (unlocked, locked or corrupt), the config, and the tokens for picked files and write targets. It also resolves the store location (`ENVARSA_STORE_PATH`, then Settings, then the portable folder or app data), loads `config.json` forgivingly, and seeds demo data (`ENVARSA_DEMO`, from `demo.json`). |
+| `state.rs` | Holds the in-memory state, meaning the session (unlocked, locked or corrupt), the config, and the tokens for picked files and write targets. It also resolves the store location (`ENVARSA_STORE_PATH`, then Settings, then app data), loads `config.json` forgivingly, and seeds demo data (`ENVARSA_DEMO`, from `demo.json`). |
 | `store.rs` | Defines the store file: its format, serialization, `open` (plain or age), `save` with a `.bak`, `write_atomic`, `align_backup`, and `merge_import` for imports. |
 | `envfile.rs` | The `.env` line model (`Line`), which is also the editor's wire format. Covers parsing, serialization, value quoting, and the merge that writes `.env.local` and reports its changes in the same pass. |
 | `envpath.rs` | Classifies a file name as writable (`.env*.local`), an example (never written) or other, and gives the refusal text for the last two. |
@@ -69,8 +69,8 @@ flowchart LR
 | `tools/check-contract.sh` | Checks that `api.js` and the command list match, that the mock answers every command, that emitted and handled events match, and that every `data-*` key has a handler. |
 | `.github/workflows/ci.yml` | On every pull request: `cargo fmt --check`, `cargo test` and the contract script on Linux, and `cargo test` on the windows-gnu toolchain the release uses. |
 | `.github/actions/setup-windows-gnu/` | The Windows toolchain setup and `WebView2Loader.dll` staging, shared by `ci.yml` and `release.yml`. |
-| `.github/workflows/release.yml` | Tagged releases: the Windows installer, portable zip and MSIX, plus the Linux AppImage and `.deb`. |
-| `tools/package-*.ps1`, `Package.appxmanifest`, `Assets/` | Windows portable and Microsoft Store packaging. |
+| `.github/workflows/release.yml` | Tagged releases: the Windows installer and MSIX, plus the engine tests on Linux. |
+| `tools/package-msix.ps1`, `Package.appxmanifest`, `Assets/` | Microsoft Store packaging. |
 | `website/` | envarsa.dev, published by `pages.yml`. |
 
 ## From the webview to disk

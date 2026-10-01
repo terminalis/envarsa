@@ -3,14 +3,7 @@
 //! Store path resolution order:
 //!   1. `ENVARSA_STORE_PATH` env var (power users, tests)
 //!   2. `store_path` in the app config file (set via Settings)
-//!   3. the default location:
-//!        - portable build (an `envarsa.portable` marker sits beside the
-//!          exe): `<exe folder>/envarsa.store`, so the unzipped folder is
-//!          self-contained and movable;
-//!        - otherwise `<app data dir>/envarsa.store`.
-//!
-//! In a portable build `config.json` lives beside the exe too, so the
-//! whole library — preferences included — travels as one folder.
+//!   3. the default location, `<app data dir>/envarsa.store`.
 
 use crate::store::{self, Opened, Snapshot, Store};
 use serde::{Deserialize, Serialize};
@@ -43,30 +36,7 @@ pub struct Config {
     pub rest: serde_json::Map<String, serde_json::Value>,
 }
 
-/// Name of the marker file a portable zip ships beside the exe. Its
-/// presence — not its contents — is what flips Envarsa into portable mode.
-const PORTABLE_MARKER: &str = "envarsa.portable";
-
-fn has_portable_marker(dir: &Path) -> bool {
-    dir.join(PORTABLE_MARKER).exists()
-}
-
-/// The folder a portable build runs from, when this is one. The portable
-/// zip ships an `envarsa.portable` marker beside the exe; its presence
-/// switches Envarsa to keeping both `config.json` and the store in that
-/// folder, so the whole library travels with the unzipped folder.
-/// Installed and Microsoft Store builds ship no marker and fall back to
-/// the per-user AppData / config dirs.
-pub fn portable_base() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let dir = exe.parent()?;
-    has_portable_marker(dir).then(|| dir.to_path_buf())
-}
-
 pub fn config_file_path(app: &tauri::AppHandle) -> PathBuf {
-    if let Some(base) = portable_base() {
-        return base.join("config.json");
-    }
     app.path()
         .app_config_dir()
         .expect("app config dir resolves")
@@ -272,14 +242,11 @@ impl AppState {
 }
 
 pub fn resolve_store_path(app: &tauri::AppHandle, config: &Config) -> (PathBuf, bool) {
-    let default = match portable_base() {
-        Some(base) => base.join("envarsa.store"),
-        None => app
-            .path()
-            .app_data_dir()
-            .expect("app data dir resolves")
-            .join("envarsa.store"),
-    };
+    let default = app
+        .path()
+        .app_data_dir()
+        .expect("app data dir resolves")
+        .join("envarsa.store");
     resolve_store_path_with(
         std::env::var("ENVARSA_STORE_PATH").ok(),
         config.store_path.as_deref(),
@@ -474,21 +441,12 @@ mod tests {
 
     #[test]
     fn blank_env_and_settings_fall_through_to_default() {
-        // A blank or whitespace value is treated as unset, including the
-        // portable default the caller computed.
-        let default = PathBuf::from("C:\\portable\\envarsa.store");
+        // A blank or whitespace value is treated as unset, so the default
+        // the caller computed is used.
+        let default = PathBuf::from("C:\\default\\envarsa.store");
         let (p, locked) = resolve_store_path_with(Some("   ".into()), Some(" "), default.clone());
         assert_eq!(p, default);
         assert!(!locked);
-    }
-
-    #[test]
-    fn portable_marker_detected_only_when_present() {
-        let dir = tmp_dir("portable");
-        assert!(!has_portable_marker(&dir), "no marker → not portable");
-        fs::write(dir.join(PORTABLE_MARKER), b"").unwrap();
-        assert!(has_portable_marker(&dir), "marker beside exe → portable");
-        fs::remove_dir_all(dir).ok();
     }
 
     #[test]
