@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Envarsa: one place for all your .env files (Windows and Linux)</title>
-<meta name="description" content="Envarsa keeps a copy of each project's .env file on your computer. Find a value months later, see which projects share a key, and write a .env.local from a .env.example. Free and open source, for Windows and Linux. Nothing is uploaded.">
+<meta name="description" content="Keep a copy of every project's .env file on your computer, see which projects share a key, and set up fresh checkouts. Free, open source, nothing uploaded.">
 <link rel="canonical" href="https://envarsa.dev/">
 <meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0f1116">
@@ -96,10 +96,9 @@
 <link rel="stylesheet" href="/site.css">
 
 <style>
-  .mono { font-family: var(--mono); }
   .sr-only {
-    position: absolute; width: 1px; height: 1px; overflow: hidden;
-    clip: rect(0 0 0 0); white-space: nowrap;
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
   }
   .skip {
     position: absolute; left: -9999px; top: 0;
@@ -143,7 +142,7 @@
   .hero h1 .accent { color: var(--accent); }
   .lead { color: var(--muted); font-size: 18px; max-width: 58ch; margin: 0 auto 30px; }
   .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px; }
-  .cta-note { color: var(--faint); font-size: 13.5px; margin: 0 0 56px; }
+  .cta-note { color: var(--muted); font-size: 13.5px; margin: 0 0 56px; }
   .hero .frame { box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
 
   /* ---------------------------------------------------------- features */
@@ -154,6 +153,7 @@
   }
   .feat + .feat { border-top: 1px solid var(--border-soft); }
   .feat.flip .feat-text { order: 2; }
+  .feat.flip { grid-template-columns: 1.25fr 1fr; }
   .feat p { color: var(--muted); margin: 0; }
 
   /* ------------------------------------------------- privacy and faq */
@@ -186,7 +186,7 @@
 
   /* --------------------------------------------------------- download */
 
-  .dl-os { font-family: var(--mono); font-size: 13px; color: var(--faint); margin: 32px 0 12px; }
+  .dl-os { font-family: var(--mono); font-size: 13px; color: var(--muted); margin: 32px 0 12px; }
   .dl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   .dl-card {
     background: var(--panel); border: 1px solid var(--border);
@@ -194,10 +194,10 @@
     display: flex; flex-direction: column; gap: 10px; align-items: flex-start;
   }
   .dl-card h3 { margin: 0; font-size: 18px; }
-  .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--faint); }
+  .dl-card .file { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
   .dl-card p { margin: 0 0 6px; color: var(--muted); font-size: 15px; flex: 1; }
   .dl-card code { overflow-wrap: anywhere; }
-  .dl-note { color: var(--faint); font-size: 13.5px; margin: 12px 0 0; }
+  .dl-note { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
 
   /* ------------------------------------------------------- responsive */
 
@@ -205,7 +205,7 @@
     section { padding-top: 72px; }
     .site-nav { display: none; }
     .nav-cta { margin-left: auto; }
-    .feat { grid-template-columns: 1fr; gap: 24px; }
+    .feat, .feat.flip { grid-template-columns: 1fr; gap: 24px; }
     .feat.flip .feat-text { order: 0; }
     .row summary { grid-template-columns: 1fr 20px; gap: 6px 16px; }
     .row summary h3, .faq .row summary h3 { grid-column: 1; grid-row: 1; }
@@ -294,7 +294,7 @@
           kept, so you can look back or restore it.</p>
         </div>
         <figure class="frame">
-          <img src="screenshots/feature-history.png" width="840" height="560" loading="lazy" decoding="async"
+          <img src="screenshots/feature-history.png" width="840" height="314" loading="lazy" decoding="async"
                alt="The lumen-api project showing an older snapshot, with a banner reading 'Viewing history' and buttons to bring it back as latest or return to the latest.">
         </figure>
       </div>
@@ -307,7 +307,7 @@
           one.</p>
         </div>
         <figure class="frame">
-          <img src="screenshots/feature-shared.png" width="840" height="560" loading="lazy" decoding="async"
+          <img src="screenshots/feature-shared.png" width="403" height="202" loading="lazy" decoding="async"
                alt="A popover on the SENTRY_DSN key listing two other projects: lumen-web with the same value, and tooling-scripts with a different value.">
         </figure>
       </div>
@@ -336,15 +336,17 @@
         <details class="row">
           <summary><h3>Nothing is uploaded</h3><span class="say">There&rsquo;s no account and no server. Envarsa works entirely offline.</span><span class="mark" aria-hidden="true"></span></summary>
           <div class="more"><div>
-            <p>The only network request it can make is a check for new versions, and that&rsquo;s off until you
-            turn it on in Settings. It asks GitHub (<code>api.github.com</code>) for the latest version number and
-            sends nothing else. Nothing downloads or installs itself.</p>
+            <p>The only network request it can make is a check for new versions, and only the Windows installer
+            has it. It runs when you click Check for updates in Settings, or by itself if you turn that on there.
+            It asks GitHub (<code>api.github.com</code>) for the latest version number and sends nothing else,
+            and nothing downloads or installs itself. The Microsoft Store and Flatpak versions make no network
+            requests at all.</p>
           </div></div>
         </details>
         <details class="row">
           <summary><h3>Values stay hidden on screen</h3><span class="say">You see the keys. Each value stays hidden until you choose to show it.</span><span class="mark" aria-hidden="true"></span></summary>
           <div class="more"><div>
-            <p>Only one value shows at a time, and it hides again after 30 seconds or when the window loses focus.
+            <p>You show values one by one, and each hides again after 30 seconds or when the window loses focus.
             Every value is hidden, even ones that look harmless like <code>PORT</code>, because Envarsa
             doesn&rsquo;t guess which ones are secret. Copying a single value sends it to the clipboard without
             showing it.</p>
