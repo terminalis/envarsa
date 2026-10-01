@@ -66,7 +66,7 @@ const COMMANDS = {
     storePath: 'C:\\Users\\you\\AppData\\Roaming\\com.envarsa.app\\envarsa.store',
     encrypted: S.encrypted, envOverride: false, customLocation: false, backupExists: true,
     projectCount: PROJECTS.length, error: null, appVersion: '0.1.0-mock',
-    updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, packaged: false,
+    updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, channel: 'direct',
   }),
   unlock: ({ passphrase }) => { if (passphrase !== 'demo') raise('wrong passphrase'); S.locked = false; },
   lock: () => { S.locked = true; },

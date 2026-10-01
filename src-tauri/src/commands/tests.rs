@@ -155,8 +155,8 @@ fn a_fresh_store_is_unlocked_and_empty() {
     assert_eq!(st["encrypted"], false);
     assert_eq!(st["storePath"], env.store_path().to_string_lossy().as_ref());
     assert_eq!(st["appVersion"], env!("CARGO_PKG_VERSION"));
-    // A test build has no package identity.
-    assert_eq!(st["packaged"], false);
+    // A test build has no package identity and runs outside a Flatpak.
+    assert_eq!(st["channel"], "direct");
     assert_eq!(st["customLocation"], false);
 }
 

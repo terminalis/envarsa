@@ -8,10 +8,12 @@
 //!
 //! It runs in exactly two cases: the user clicks "Check for updates",
 //! or the user has turned on the automatic check (off by default) —
-//! then at most once per 24h, shortly after launch.
+//! then at most once per 24h, shortly after launch. Builds that update
+//! through a store (Microsoft Store, Flatpak) never run it.
 //!
 //! Invariant: ONE-EGRESS (ARCHITECTURE.md).
 
+use crate::channel;
 use crate::state::{self, AppState};
 use serde::Serialize;
 use std::time::Duration;
@@ -105,39 +107,15 @@ pub(crate) fn parse_tag(tag: &str) -> Result<semver::Version, String> {
         .map_err(|_| "GitHub answered with an unusable release tag".to_string())
 }
 
-/// True when Envarsa is running as its packaged (MSIX / Microsoft Store)
-/// build. Store users are updated through the Store, so the in-app update
-/// check — which points at GitHub releases — must be suppressed in that
-/// case. Detected via the Win32 `GetCurrentPackageFullName` (the Win32
-/// face of `Package.Current`): it answers `APPMODEL_ERROR_NO_PACKAGE` for
-/// an unpackaged process, and any other status (here `ERROR_INSUFFICIENT_BUFFER`,
-/// since the query buffer is empty) means a package identity exists.
-/// Always false off Windows.
-#[cfg(windows)]
-pub fn is_packaged() -> bool {
-    use windows::Win32::Foundation::APPMODEL_ERROR_NO_PACKAGE;
-    use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
-    let mut len: u32 = 0;
-    // SAFETY: the documented "query" form — a length pointer with no
-    // output buffer. The call writes only `len` and returns a status code.
-    let rc = unsafe { GetCurrentPackageFullName(&mut len, None) };
-    rc != APPMODEL_ERROR_NO_PACKAGE
-}
-
-#[cfg(not(windows))]
-pub fn is_packaged() -> bool {
-    false
-}
-
 /// The automatic path: spawned once at startup, does nothing unless the
 /// user opted in and a check is due. Failures are silent by design —
 /// the manual button is the loud path.
 pub fn maybe_spawn_auto_check(app: AppHandle) {
-    // Store builds update through the Store; the in-app check points at
-    // GitHub, so it must never fire when packaged — even if a user flipped
-    // the opt-in toggle (e.g. in a config carried over from a non-Store
-    // build).
-    if is_packaged() {
+    // Store and Flatpak builds update through their store; the in-app
+    // check points at GitHub, so it must never fire there — even if a user
+    // flipped the opt-in toggle (e.g. in a config carried over from a
+    // direct download).
+    if channel::current().updates_externally() {
         return;
     }
     std::thread::spawn(move || {
@@ -214,9 +192,9 @@ pub struct UpdateCheckResult {
 /// legitimately postpones the next automatic one.
 #[tauri::command]
 pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheckResult, String> {
-    if is_packaged() {
+    if channel::current().updates_externally() {
         return Err(
-            "This is the Microsoft Store build — it updates through the Store, so the in-app check is off."
+            "This build updates through the Microsoft Store or Flathub, so the in-app check is off."
                 .into(),
         );
     }

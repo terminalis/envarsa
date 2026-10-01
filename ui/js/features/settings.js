@@ -50,15 +50,21 @@ export function gateView(S) {
 
 // ------------------------------------------------------------ settings
 
-// The About paragraph; packaged and direct builds differ only in how it ends.
+// The About paragraph; store and direct builds differ only in how it ends.
 const aboutText = (st, ending) =>
   `<p class="muted">Envarsa ${esc(st.appVersion)} — a local-first library for your environment values. It copies and exports, and never injects into processes; the one way it writes into a project tree is an explicit, guarded export to a <span class="mono">.env*.local</span> (never a committed example file). No cloud, no telemetry${ending}</p>`;
 
 function aboutSection(st, m) {
-  if (st.packaged) {
+  if (st.channel === 'microsoft-store') {
     return `
       ${aboutText(st, ', and no network calls.')}
       <p class="hint">Installed from the Microsoft Store — updates arrive through the Store automatically, so the in-app update check is off.</p>`;
+  }
+  if (st.channel === 'flatpak') {
+    return `
+      ${aboutText(st, ', and no network calls.')}
+      <p class="hint">Installed as a Flatpak. This build has no network access; updates come through Flathub. Installed the <span class="mono">.flatpak</span> file from GitHub? New releases are on the releases page.</p>
+      <div class="settings-actions"><button class="btn" data-act="open-releases">Open releases page</button></div>`;
   }
   return `
       ${aboutText(st, ' — the only thing that ever leaves is an update check you trigger or opt into below: one request to GitHub for the latest release number.')}

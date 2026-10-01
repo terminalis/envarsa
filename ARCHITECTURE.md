@@ -39,6 +39,7 @@ flowchart LR
 | `envpath.rs` | Classifies a file name as writable (`.env*.local`), an example (never written) or other, and gives the refusal text for the last two. |
 | `crypto.rs` | age passphrase encryption. An encrypted store is a plain age file. |
 | `clipboard.rs` | Copying a secret: Windows history and cloud exclusion, retry with backoff, and clearing after 30 s. |
+| `channel.rs` | How this copy was installed (direct download, Microsoft Store or Flatpak), detected once. It answers whether updates come through a store and whether the app runs sandboxed. |
 | `update.rs` | The opt-in update check and the only network code. It holds the three update commands and the build's running version. |
 | `commands/mod.rs` | Plumbing shared by the commands: `with_store`, `mutate`, `dialog_path` and `read_text_capped`. |
 | `commands/session.rs` | Status, unlock, lock, the three protection changes (through `reprotect`) and restoring a backup. |
@@ -150,7 +151,7 @@ place that enforces a rule names it in a comment.
 | **ATOMIC-WRITES** | The store, `config.json` and `.env.local` are written through a temp file, fsync and rename, so a crash can't leave a torn file. The store keeps a `.bak` of its previous version. | `store::write_atomic`, `store::save` |
 | **MEMORY-FOLLOWS-DISK** | The live store changes only after its save succeeds. A protection change adopts the new passphrase only after saving under it. | `commands::mutate`, `session::reprotect` |
 | **BACKUP-MATCHES-PROTECTION** | After encryption is turned on, changed or turned off, the `.bak` is rewritten under the new protection, so no plaintext copy survives encrypting. | `store::align_backup` via `reprotect` |
-| **ONE-EGRESS** | The update check is the only network code. It runs only when the user clicks "Check for updates", or when they have turned on the automatic check. It uses HTTPS only, follows no redirects, reads at most 256 KB, and parses the tag strictly. The automatic check runs at most once every 24 h and stamps the time before fetching, so a failing network can't cause a retry storm. It is off in Microsoft Store builds. | `update.rs` |
+| **ONE-EGRESS** | The update check is the only network code. It runs only when the user clicks "Check for updates", or when they have turned on the automatic check. It uses HTTPS only, follows no redirects, reads at most 256 KB, and parses the tag strictly. The automatic check runs at most once every 24 h and stamps the time before fetching, so a failing network can't cause a retry storm. It is off in Microsoft Store and Flatpak builds; the Flatpak build has no network permission. | `update.rs`, `channel.rs` |
 
 Two more rules support these:
 

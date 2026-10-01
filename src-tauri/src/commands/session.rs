@@ -1,4 +1,5 @@
 use super::R;
+use crate::channel::Channel;
 use crate::state::{self, AppState, Inner, Session};
 use crate::store::{self, Opened, Store};
 use serde::Serialize;
@@ -37,10 +38,10 @@ pub struct StatusPayload {
     /// persisted value can never badge the UI.
     pub update_available: Option<String>,
     pub auto_update_check: bool,
-    /// True for the packaged (MSIX / Microsoft Store) build, where updates
-    /// come through the Store. The UI hides its update controls then, and
-    /// `update_available` is forced to None.
-    pub packaged: bool,
+    /// How this copy was installed. When updates come through a store,
+    /// the UI hides its update controls and `update_available` is forced
+    /// to None.
+    pub channel: Channel,
 }
 
 fn status_of(inner: &Inner) -> StatusPayload {
@@ -54,7 +55,7 @@ fn status_of(inner: &Inner) -> StatusPayload {
         Session::Locked => (SessionState::Locked, true, None, None),
         Session::Corrupt { error } => (SessionState::Corrupt, false, None, Some(error.clone())),
     };
-    let packaged = crate::update::is_packaged();
+    let channel = crate::channel::current();
     let version = crate::update::running_version();
     StatusPayload {
         state,
@@ -71,9 +72,9 @@ fn status_of(inner: &Inner) -> StatusPayload {
         project_count,
         error,
         app_version: version.to_string(),
-        // The Store build never runs the GitHub check, so it must never
-        // badge an "available" version either.
-        update_available: if packaged {
+        // Store and Flatpak builds never run the GitHub check, so they
+        // must never badge an "available" version either.
+        update_available: if channel.updates_externally() {
             None
         } else {
             inner
@@ -85,7 +86,7 @@ fn status_of(inner: &Inner) -> StatusPayload {
                 .map(|v| v.to_string())
         },
         auto_update_check: inner.config.auto_update_check,
-        packaged,
+        channel,
     }
 }
 
