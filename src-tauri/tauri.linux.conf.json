@@ -1,10 +1,9 @@
 {
+  "identifier": "dev.envarsa.Envarsa",
+  "app": {
+    "enableGTKAppId": true
+  },
   "bundle": {
-    "targets": ["appimage", "deb"],
-    "linux": {
-      "deb": {
-        "depends": ["libssl3"]
-      }
-    }
+    "active": false
   }
 }

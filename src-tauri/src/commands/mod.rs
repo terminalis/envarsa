@@ -67,6 +67,40 @@ async fn dialog_path(
         .transpose()
 }
 
+/// Where a picked or dropped file lives on the host, to record and
+/// show. In the Flatpak such a file arrives through the Documents portal
+/// as `/run/user/<uid>/doc/<id>/<name>`, which reads fine but means
+/// nothing outside the sandbox, so the portal is asked for the real
+/// path; `None` when it can't answer, and then nothing is recorded.
+/// Elsewhere the path already is the real one.
+async fn host_path(path: &Path) -> Option<PathBuf> {
+    #[cfg(target_os = "linux")]
+    if crate::channel::current().sandboxed() {
+        if let Some(id) = doc_id(path) {
+            use ashpd::documents::{DocumentID, Documents};
+            let id = DocumentID::from(id);
+            let docs = Documents::new().await.ok()?;
+            let mut hosts = docs.host_paths(std::slice::from_ref(&id)).await.ok()?;
+            return hosts.remove(&id).map(|p| p.as_ref().to_path_buf());
+        }
+    }
+    Some(path.to_path_buf())
+}
+
+/// The document id in a Documents-portal file path,
+/// `/run/user/<uid>/doc/<id>/<name>`.
+#[cfg(target_os = "linux")]
+fn doc_id(path: &Path) -> Option<&str> {
+    let mut parts = path.strip_prefix("/run/user").ok()?.components();
+    parts.next()?; // the uid
+    if parts.next()?.as_os_str() != "doc" {
+        return None;
+    }
+    let id = parts.next()?.as_os_str().to_str()?;
+    // Exactly one file inside the document: what pickers and drops make.
+    (parts.next().is_some() && parts.next().is_none()).then_some(id)
+}
+
 /// Read a user-picked text file (an .env, an example, a merge target),
 /// lossily as UTF-8, refusing anything over 2 MB.
 fn read_text_capped(path: &Path) -> R<String> {

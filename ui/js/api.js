@@ -35,9 +35,11 @@ export const api = {
   // Write a project's values out to a .env.local. The target path is
   // staged Rust-side behind an opaque token; only the token comes back.
   // A token from pickExampleFile fills that example instead, and
-  // ignores `merge`.
+  // ignores `merge`. In the Flatpak every target comes from the save
+  // dialog (`pickRequired`); passing an example's token to
+  // pickWriteTarget sets where that example is written.
   stageWriteTarget: (projectId, snapshotId) => invoke('stage_write_target', { projectId, snapshotId }),
-  pickWriteTarget: (suggestedDir = null) => invoke('pick_write_target', { suggestedDir }),
+  pickWriteTarget: (suggestedDir = null, exampleToken = null) => invoke('pick_write_target', { suggestedDir, exampleToken }),
   pickExampleFile: () => invoke('pick_example_file'),
   previewWrite: (projectId, snapshotId, token, merge) => invoke('preview_write', { projectId, snapshotId, token, merge }),
   writeEnvLocal: (projectId, snapshotId, token, merge) => invoke('write_env_local', { projectId, snapshotId, token, merge }),
@@ -55,7 +57,7 @@ export const api = {
   disableEncryption: (passphrase) => invoke('disable_encryption', { passphrase }),
 
   revealStore: () => invoke('reveal_store'),
-  relocateStore: () => invoke('relocate_store'),
+  moveStoreToDefault: () => invoke('move_store_to_default'),
   exportStore: (passphrase = null) => invoke('export_store', { passphrase }),
   // The picker returns an opaque token; inspect/apply present it back.
   // No path ever travels webview → core.

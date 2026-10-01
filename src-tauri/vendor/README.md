@@ -25,7 +25,7 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml
 ```
 
 The first command uses the application's release optimization settings. The
-Linux release workflow runs it before building the bundles. A passing release
+release workflow's `test-linux` job runs it on every release. A passing release
 test must be obtained before treating runtime verification as complete; the
 backport was prepared on a host without Rust or GLib development tools.
 

@@ -6,6 +6,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod channel;
 mod clipboard;
 mod commands;
 mod crypto;
@@ -85,7 +86,7 @@ fn main() {
             commands::session::change_passphrase,
             commands::session::disable_encryption,
             commands::transfer::reveal_store,
-            commands::transfer::relocate_store,
+            commands::transfer::move_store_to_default,
             update::check_for_updates,
             update::set_auto_update_check,
             update::open_releases_page,

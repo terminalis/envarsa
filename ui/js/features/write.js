@@ -2,7 +2,8 @@
 // project tree, either into a target file (merge or overwrite) or filled
 // into a .env.example's layout. Rust stages each target behind an opaque
 // token, and the token's staged kind decides which of the two it is;
-// the webview only ever shows the path.
+// the webview only ever shows the path. In the Flatpak a target is only
+// staged once the user picks it in the save dialog (`pickRequired`).
 import { api } from '../api.js';
 import { esc, errText } from '../util.js';
 import { modalShell } from '../kit.js';
@@ -14,8 +15,9 @@ let previewSeq = 0;
 // re-rendering the dialog, so tab and button focus survive. Only the
 // latest request lands: a slow answer for a tab or mode the user has
 // already left is dropped.
-// The token for the open tab: the staged target, or the example scaffold.
-const tabToken = (m) => (m.tab === 'example' ? m.example?.token : m.token);
+// The token for the open tab: the staged target, or the example scaffold
+// once it has somewhere to go.
+const tabToken = (m) => (m.tab === 'example' ? (m.example?.pickRequired ? null : m.example?.token) : m.token);
 
 async function refreshWritePreview(m) {
   const seq = ++previewSeq;
@@ -57,30 +59,43 @@ const segButton = (m, field, value, label) =>
 
 const canWrite = (m, cls) => cls === 'writable' && !m.busy && !m.preview?.blocked;
 
+// "Will write into <dir>", for a target the save dialog still has to pick.
+const willWriteInto = (dir) => (dir
+  ? `<p class="muted">Will write into <span class="mono">${esc(dir)}</span>.</p>`
+  : '<p class="muted">Choose where to write the <span class="mono">.env.local</span>.</p>');
+
 function exampleBody(m) {
   const ex = m.example;
-  const body = ex
-    ? `
-<p class="muted">Filling <span class="mono">${esc(ex.exampleName)}</span>’s comments and keys with this project’s values, written beside it:</p>
+  let body = `<p class="muted">Pick a <span class="mono">.env.example</span> for its <span class="mono">#</span> comments and key labels. Envarsa fills in this project’s values and writes a <span class="mono">.env.local</span> next to it — the example file is only read, never written.</p>`;
+  if (ex?.pickRequired) {
+    body = `
+<p class="muted">Filling <span class="mono">${esc(ex.exampleName)}</span>’s comments and keys with this project’s values.</p>
+${willWriteInto(ex.dir)}`;
+  } else if (ex) {
+    body = `
+<p class="muted">Filling <span class="mono">${esc(ex.exampleName)}</span>’s comments and keys with this project’s values, written ${ex.picked ? 'to' : 'beside it'}:</p>
 <p class="mono settings-path" title="${esc(ex.outPath)}">${esc(ex.outPath)} ${writeClassBadge(ex.outClass)}</p>
-<div class="preview" id="write-preview">${writePreviewView(m.preview)}</div>`
-    : `<p class="muted">Pick a <span class="mono">.env.example</span> for its <span class="mono">#</span> comments and key labels. Envarsa fills in this project’s values and writes a <span class="mono">.env.local</span> next to it — the example file is only read, never written.</p>`;
+<div class="preview" id="write-preview">${writePreviewView(m.preview)}</div>`;
+  }
+  let confirm = '';
+  if (ex?.pickRequired) confirm = '<button class="btn btn-accent" data-act="write-pick-example-target">Choose where to write…</button>';
+  else if (ex) confirm = `<button class="btn btn-accent" data-act="write-confirm"${canWrite(m, ex.outClass) ? '' : ' disabled'}>${m.busy ? 'Writing…' : 'Write .env.local'}</button>`;
   return `
 ${body}
 <footer class="modal-foot">
   <button class="btn" data-act="write-pick-example">${ex ? 'Choose a different example…' : 'Choose .env.example…'}</button>
   <span class="spacer"></span>
   <button class="btn" data-act="close-modal">Cancel</button>
-  ${ex ? `<button class="btn btn-accent" data-act="write-confirm"${canWrite(m, ex.outClass) ? '' : ' disabled'}>${m.busy ? 'Writing…' : 'Write .env.local'}</button>` : ''}
+  ${confirm}
 </footer>`;
 }
 
 function targetBody(m) {
   if (!m.token) {
     return `
-<p class="muted">This project has no remembered folder. Choose where to write its <span class="mono">.env.local</span> — Envarsa only writes to a <span class="mono">.env*.local</span>, never a committed example file.</p>
+${m.pickRequired ? willWriteInto(m.dir) : '<p class="muted">This project has no remembered folder. Choose where to write its <span class="mono">.env.local</span> — Envarsa only writes to a <span class="mono">.env*.local</span>, never a committed example file.</p>'}
 <footer class="modal-foot">
-  <button class="btn btn-accent" data-act="write-change-location">Choose location…</button>
+  <button class="btn btn-accent" data-act="write-change-location">${m.pickRequired ? 'Choose where to write…' : 'Choose location…'}</button>
   <span class="spacer"></span>
   <button class="btn" data-act="close-modal">Cancel</button>
 </footer>`;
@@ -133,6 +148,7 @@ export const actions = {
   'open-write': run(async () => {
     const v = S.view;
     // No remembered directory is fine: the dialog offers "Choose location".
+    // In the Flatpak nothing is staged yet; the save dialog picks it.
     const target = await api.stageWriteTarget(v.id, v.snapshotId).catch(() => null);
     const m = {
       kind: 'write',
@@ -144,6 +160,7 @@ export const actions = {
       class: null,
       exists: false,
       dir: null,
+      pickRequired: false,
       example: null,
       preview: null,
       busy: false,
@@ -157,6 +174,16 @@ export const actions = {
     const t = await api.pickWriteTarget(m.dir || null);
     if (!t || S.modal !== m) return;
     Object.assign(m, t);
+    renderModal();
+    refreshWritePreview(m);
+  }),
+  // The example's destination, from the save dialog (Flatpak only).
+  'write-pick-example-target': run(async () => {
+    const m = S.modal;
+    const ex = m.example;
+    const t = await api.pickWriteTarget(ex.dir || null, ex.token);
+    if (!t || S.modal !== m || m.example !== ex) return;
+    m.example = { ...ex, token: t.token, outPath: t.path, outClass: t.class, pickRequired: false, picked: true };
     renderModal();
     refreshWritePreview(m);
   }),

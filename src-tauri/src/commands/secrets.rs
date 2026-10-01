@@ -46,7 +46,8 @@ pub fn reveal_value(
 }
 
 /// Copies a single value Rust → OS clipboard; the value never transits
-/// the webview.
+/// the webview. The copy happens after the state is unlocked, since on
+/// Linux it waits for the GTK main thread.
 #[tauri::command]
 pub fn copy_value(
     state: State<'_, AppState>,
@@ -54,23 +55,23 @@ pub fn copy_value(
     snapshot_id: String,
     idx: usize,
 ) -> R<String> {
-    with_store(&state, |store| {
+    let (key, value) = with_store(&state, |store| {
         match line_at(store, &project_id, &snapshot_id, idx)? {
-            Line::Entry { key, value, .. } => {
-                copy_secret_to_clipboard(value)?;
-                Ok(key)
-            }
+            Line::Entry { key, value, .. } => Ok((key, value)),
             _ => Err("that line is not an entry".into()),
         }
-    })
+    })?;
+    copy_secret_to_clipboard(value)?;
+    Ok(key)
 }
 
 /// Copies the whole snapshot block (raw bytes, exactly as captured).
 #[tauri::command]
 pub fn copy_block(state: State<'_, AppState>, project_id: String, snapshot_id: String) -> R<usize> {
-    with_store(&state, |store| {
-        let (_, snapshot) = store.find(&project_id, Some(&snapshot_id))?;
-        copy_secret_to_clipboard(snapshot.raw.clone())?;
-        Ok(envfile::entry_count(&snapshot.raw))
-    })
+    let raw = with_store(&state, |store| {
+        Ok(store.find(&project_id, Some(&snapshot_id))?.1.raw.clone())
+    })?;
+    let count = envfile::entry_count(&raw);
+    copy_secret_to_clipboard(raw)?;
+    Ok(count)
 }

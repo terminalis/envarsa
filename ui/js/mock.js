@@ -64,9 +64,9 @@ const COMMANDS = {
   store_status: () => ({
     state: S.locked ? 'locked' : 'unlocked',
     storePath: 'C:\\Users\\you\\AppData\\Roaming\\com.envarsa.app\\envarsa.store',
-    encrypted: S.encrypted, envOverride: false, portable: false, backupExists: true,
+    encrypted: S.encrypted, envOverride: false, customLocation: false, backupExists: true,
     projectCount: PROJECTS.length, error: null, appVersion: '0.1.0-mock',
-    updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, packaged: false,
+    updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, channel: 'direct',
   }),
   unlock: ({ passphrase }) => { if (passphrase !== 'demo') raise('wrong passphrase'); S.locked = false; },
   lock: () => { S.locked = true; },
@@ -100,7 +100,7 @@ const COMMANDS = {
   pick_write_target: () => target,
   pick_example_file: () => ({
     token: 'mock-example', exampleName: '.env.example', outPath: `${DIR}\\.env.local`,
-    outClass: 'writable', exampleKeys: ['PORT', 'DATABASE_URL', 'MAILER_URL'],
+    outClass: 'writable', dir: DIR, pickRequired: false, exampleKeys: ['PORT', 'DATABASE_URL', 'MAILER_URL'],
   }),
   preview_write: ({ token }) => (token === 'mock-example' ? EXAMPLE_PREVIEW : PREVIEW),
   write_env_local: () => `${DIR}\\.env.local`,
@@ -116,7 +116,7 @@ const COMMANDS = {
   change_passphrase: () => {},
   disable_encryption: () => { S.encrypted = false; },
   reveal_store: () => {},
-  relocate_store: () => 'D:\\sync\\envarsa.store',
+  move_store_to_default: () => 'D:\\sync\\envarsa.store',
   export_store: () => 'C:\\Users\\you\\Desktop\\envarsa.store',
   pick_import_store: () => 'mock-import',
   // The fixture import is encrypted with the passphrase "demo".

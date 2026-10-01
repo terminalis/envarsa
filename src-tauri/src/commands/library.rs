@@ -1,4 +1,4 @@
-use super::{dialog_path, latest_effective, mutate, read_text_capped, with_store, R};
+use super::{dialog_path, host_path, latest_effective, mutate, read_text_capped, with_store, R};
 use crate::envfile::{self, Line};
 use crate::state::{AppState, Session};
 use crate::store::{self, Project, Snapshot, Store};
@@ -273,19 +273,30 @@ pub struct PickedFile {
     pub text: String,
 }
 
-/// Read a picked or dropped `.env` and stage it as a capture's source.
-pub(super) fn stage_env_file(state: &State<'_, AppState>, path: &Path) -> R<PickedFile> {
+/// Read a picked or dropped `.env` at `path` and stage it as a
+/// capture's source. `host` is where it lives on the host (`host_path`):
+/// that is what gets shown and recorded, and what names the project.
+pub(super) fn stage_env_file(
+    state: &State<'_, AppState>,
+    path: &Path,
+    host: Option<PathBuf>,
+) -> R<PickedFile> {
     let text = read_text_capped(path)?;
-    let dir = path.parent().map(|p| p.to_string_lossy().to_string());
+    let folder = host.as_deref().and_then(Path::parent);
+    let dir = folder.map(|p| p.to_string_lossy().to_string());
     // A .env usually lives in the project root, so the parent folder
     // name is a good default project name.
-    let name_guess = path
-        .parent()
+    let name_guess = folder
         .and_then(|p| p.file_name())
         .map(|n| n.to_string_lossy().to_string());
+    let shown = host
+        .as_deref()
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string();
     Ok(PickedFile {
-        token: state.with(|inner| Ok(inner.stage_source(path.to_path_buf())))?,
-        path: path.to_string_lossy().to_string(),
+        token: state.with(|inner| Ok(inner.stage_source(host)))?,
+        path: shown,
         dir,
         name_guess,
         text,
@@ -294,13 +305,16 @@ pub(super) fn stage_env_file(state: &State<'_, AppState>, path: &Path) -> R<Pick
 
 #[tauri::command]
 pub async fn pick_env_file(app: AppHandle, state: State<'_, AppState>) -> R<Option<PickedFile>> {
-    dialog_path(&app, |d| {
+    let Some(path) = dialog_path(&app, |d| {
         d.set_title("Choose a .env file to capture")
             .blocking_pick_file()
     })
     .await?
-    .map(|path| stage_env_file(&state, &path))
-    .transpose()
+    else {
+        return Ok(None);
+    };
+    let host = host_path(&path).await;
+    stage_env_file(&state, &path, host).map(Some)
 }
 
 /// Drag/drop is handled as a window event so the path never round-trips
@@ -315,15 +329,32 @@ pub fn handle_drop(window: &tauri::Window, paths: &[PathBuf]) {
     if !unlocked {
         return;
     }
-    let Some(path) = paths.first() else { return };
-    match stage_env_file(&state, path) {
-        Ok(picked) => {
-            let _ = window.emit("env-file-dropped", &picked);
+    let Some(path) = paths.first().cloned() else {
+        return;
+    };
+    // This handler runs on the GTK main thread, and asking the Documents
+    // portal for the host path is an async D-Bus call, so the rest runs
+    // as a task instead of blocking the window while it waits.
+    let window = window.clone();
+    tauri::async_runtime::spawn(async move {
+        let host = host_path(&path).await;
+        // The store may have locked while the portal answered.
+        let state = window.state::<AppState>();
+        let unlocked = state
+            .with(|inner| Ok(matches!(inner.session, Session::Unlocked { .. })))
+            .unwrap_or(false);
+        if !unlocked {
+            return;
         }
-        Err(e) => {
-            let _ = window.emit("env-drop-error", &e);
+        match stage_env_file(&state, &path, host) {
+            Ok(picked) => {
+                let _ = window.emit("env-file-dropped", &picked);
+            }
+            Err(e) => {
+                let _ = window.emit("env-drop-error", &e);
+            }
         }
-    }
+    });
 }
 
 #[derive(Deserialize)]
@@ -401,13 +432,13 @@ pub fn capture(state: State<'_, AppState>, args: CaptureArgs) -> R<CaptureResult
         Some(token) => Some(state.with(|inner| {
             inner
                 .pending_source(token)
-                .map(|p| p.to_string_lossy().to_string())
+                .map(|p| p.map(|p| p.to_string_lossy().to_string()))
                 .ok_or_else(|| "that file is no longer staged — choose it again".into())
         })?),
         None => None,
     };
     let via = if source.is_some() { "file" } else { "paste" };
-    let snapshot = Snapshot::new(via, source, args.text);
+    let snapshot = Snapshot::new(via, source.flatten(), args.text);
     mutate(&state, |store| {
         add_snapshot(
             store,

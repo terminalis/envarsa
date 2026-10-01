@@ -58,7 +58,7 @@
   <div class="container">
     <p class="kicker"># privacy</p>
     <h1><span class="accent">Envarsa</span> Privacy Policy</h1>
-    <p class="updated">Last updated: June 22, 2026</p>
+    <p class="updated">Last updated: October 1, 2026</p>
 
     <p class="lede">
       Envarsa is <strong>local-first</strong>. There are no accounts, no cloud, no telemetry, and no analytics.
@@ -77,9 +77,9 @@
     <p>
       Everything Envarsa stores lives locally in a single store file on your device
       (<code>%APPDATA%\com.envarsa.app\envarsa.store</code> on Windows,
-      <code>~/.local/share/com.envarsa.app/envarsa.store</code> on Linux). The file is plaintext JSON by default,
-      with optional passphrase encryption at rest in the standard <a href="https://age-encryption.org" rel="noopener">age</a>
-      format. It is never uploaded or synchronized by Envarsa; any backup or sync is something you set up yourself.
+      <code>~/.var/app/dev.envarsa.Envarsa/data/envarsa.store</code> in the Linux Flatpak). The file is plaintext
+      JSON by default, with optional passphrase encryption at rest in the standard
+      <a href="https://age-encryption.org" rel="noopener">age</a> format. It is never uploaded or synchronized by Envarsa; any backup is something you set up yourself.
     </p>
 
     <h2>The one network connection</h2>
@@ -88,6 +88,10 @@
         Envarsa makes <strong>no network requests by default</strong>. The single exception is an
         <strong>opt-in update check that is off by default</strong>. It runs only if you turn it on in Settings,
         or when you click &ldquo;Check for updates.&rdquo;
+      </p>
+      <p>
+        The update check exists only in the Windows installer from GitHub Releases. The <strong>Microsoft Store
+        and Flatpak builds make no network connection at all</strong>; the Flatpak has no network permission.
       </p>
     </div>
     <p>When it runs, the update check makes <strong>one HTTPS GET</strong> to:</p>

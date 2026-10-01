@@ -50,15 +50,21 @@ export function gateView(S) {
 
 // ------------------------------------------------------------ settings
 
-// The About paragraph; packaged and direct builds differ only in how it ends.
+// The About paragraph; store and direct builds differ only in how it ends.
 const aboutText = (st, ending) =>
   `<p class="muted">Envarsa ${esc(st.appVersion)} — a local-first library for your environment values. It copies and exports, and never injects into processes; the one way it writes into a project tree is an explicit, guarded export to a <span class="mono">.env*.local</span> (never a committed example file). No cloud, no telemetry${ending}</p>`;
 
 function aboutSection(st, m) {
-  if (st.packaged) {
+  if (st.channel === 'microsoft-store') {
     return `
       ${aboutText(st, ', and no network calls.')}
       <p class="hint">Installed from the Microsoft Store — updates arrive through the Store automatically, so the in-app update check is off.</p>`;
+  }
+  if (st.channel === 'flatpak') {
+    return `
+      ${aboutText(st, ', and no network calls.')}
+      <p class="hint">Installed as a Flatpak. This build has no network access; updates come through Flathub. Installed the <span class="mono">.flatpak</span> file from GitHub? New releases are on the releases page.</p>
+      <div class="settings-actions"><button class="btn" data-act="open-releases">Open releases page</button></div>`;
   }
   return `
       ${aboutText(st, ' — the only thing that ever leaves is an update check you trigger or opt into below: one request to GitHub for the latest release number.')}
@@ -105,6 +111,9 @@ function protectionSection(st) {
 </form>`;
 }
 
+// Windows calls its file manager Explorer; elsewhere it varies.
+const REVEAL_LABEL = /Windows/.test(navigator.userAgent) ? 'Show in Explorer' : 'Show in folder';
+
 function settingsModal(S, m) {
   const st = S.status;
   return modalShell({ cls: 'settings', label: 'Settings' }, `
@@ -112,15 +121,17 @@ function settingsModal(S, m) {
     <section>
       <h3>Store file</h3>
       <p class="mono settings-path" title="${esc(st.storePath)}">${esc(st.storePath)}</p>
+      ${st.channel === 'flatpak' ? '<p class="hint warn">Uninstalling with <span class="mono">flatpak uninstall --delete-data</span> also deletes this library — export a copy first.</p>' : ''}
       ${st.envOverride ? '<p class="hint warn">Location forced by <span class="mono">ENVARSA_STORE_PATH</span> for this run.</p>' : ''}
-      <p class="muted">One portable file holds everything${st.backupExists ? ' — a one-step <span class="mono">.bak</span> sits next to it' : ''}. Portability is manual and yours: export a copy to carry over (optionally encrypted for the trip), import another store's projects into this one, or keep the file in a folder you sync yourself.</p>
+      ${st.customLocation ? `
+      <p class="hint">This library lives at a location chosen in an earlier version.</p>
+      <div class="settings-actions"><button class="btn" data-act="move-store-to-default">Move to default location</button></div>` : ''}
+      <p class="muted">One portable file holds everything${st.backupExists ? ' — a one-step <span class="mono">.bak</span> sits next to it' : ''}. Portability is manual and yours: export a copy to carry over (optionally encrypted for the trip), or import another store's projects into this one.</p>
       <div class="settings-actions">
-        <button class="btn" data-act="reveal-store"><span class="btn-ic">${ICONS.folder}</span>Show in Explorer</button>
-        <button class="btn" data-act="relocate-store" title="Pick a new home for the store file — Envarsa moves it there and keeps using it from then on">Change location…</button>
+        <button class="btn" data-act="reveal-store"><span class="btn-ic">${ICONS.folder}</span>${REVEAL_LABEL}</button>
         <button class="btn" data-act="open-export-store"><span class="btn-ic">${ICONS.download}</span>Export…</button>
         <button class="btn" data-act="open-import-store">Import…</button>
       </div>
-      ${st.portable ? '<p class="hint">Portable build: the store and your settings live in this folder, so they travel with it. <strong>Change location&hellip;</strong> can move the store elsewhere, but a spot outside this folder will not travel when you move the folder.</p>' : ''}
     </section>
     <section>
       <h3>Protection</h3>
@@ -214,11 +225,10 @@ export const actions = {
   },
   'open-releases': run(async () => api.openReleasesPage()),
   'reveal-store': run(async () => api.revealStore()),
-  'relocate-store': run(async () => {
-    const path = await api.relocateStore();
-    if (!path) return;
+  'move-store-to-default': run(async () => {
+    const old = await api.moveStoreToDefault();
     await refreshStatus(); // the settings dialog re-renders with the new path
-    toast('Store moved', 'success', path);
+    toast('Store moved to the default location — the old copy was left here:', 'success', old);
   }),
   'open-export-store': () =>
     // Default to encrypting the copy when the store itself is encrypted.
