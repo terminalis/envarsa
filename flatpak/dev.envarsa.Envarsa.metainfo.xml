@@ -80,6 +80,15 @@
   </supports>
 
   <releases>
+    <release version="2.0.0" date="2026-10-01">
+      <description>
+        <p>
+          Envarsa is now available as a Flatpak. Settings exports and imports the library in place of moving
+          the store file, and a library moved by an earlier version can be copied back to the default
+          location. The portable Windows build, AppImage and .deb are no longer published.
+        </p>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-09-30">
       <description>
         <p>
