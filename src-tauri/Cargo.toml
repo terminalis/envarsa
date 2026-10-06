@@ -45,7 +45,7 @@ arboard = { version = "3.6", default-features = false }
 tauri-plugin-dialog = { version = "2", default-features = false, features = ["xdg-portal"] }
 # The Documents portal maps a picked file back to its real path; the
 # same version and features the dialog plugin already brings in.
-ashpd = { version = "0.11", default-features = false, features = ["tokio"] }
+ashpd = { version = "0.13", default-features = false, features = ["tokio"] }
 # GTK's own clipboard (clipboard.rs); already in the tree via Tauri.
 gtk = "0.18"
 
