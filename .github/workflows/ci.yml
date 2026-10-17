@@ -7,10 +7,11 @@
 # includes rustfmt, the same as release.yml. The Flatpak itself builds in the
 # GNOME runtime instead (flatpak.yml).
 #
-# `test-windows` runs the same test suite on the windows-gnu toolchain the
-# release uses, so Windows-only code (#[cfg(windows)]: the clipboard history
-# exclusion, the Store package check, the title bar) compiles and is tested on
-# every pull request, not only when a release is built.
+# `test-windows` runs the same test suite on Windows with the runner's
+# preinstalled MSVC Rust, as release.yml does, so Windows-only code
+# (#[cfg(windows)]: the clipboard history exclusion, the Store package check,
+# the title bar) compiles and is tested on every pull request, not only when a
+# release is built.
 
 name: ci
 
@@ -48,8 +49,6 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
-
-      - uses: ./.github/actions/setup-windows-gnu
 
       - name: Run tests
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml

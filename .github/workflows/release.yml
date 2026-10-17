@@ -11,13 +11,9 @@
 # without a <release> entry in the Flatpak metainfo: AppStream lists each
 # release with its date, and Flathub shows them.
 #
-# The Windows build mirrors the local setup from the README's windows-gnu
-# note: gnu host toolchain, stock MinGW-w64 binutils on PATH, and the prefixed
-# gcc aliases disabled so rustc keeps its self-contained linker. The gnu exe
-# loads WebView2Loader.dll at runtime; tauri.windows.conf.json bundles it as a
-# resource, and the setup-windows-gnu action (shared with ci.yml) stages it
-# where the resource path expects — nothing else creates that file on a clean
-# checkout.
+# The Windows build uses the runner's preinstalled MSVC Rust and Visual
+# Studio, as ci.yml does. On MSVC the WebView2 loader is linked into the exe,
+# so no DLL ships beside it.
 #
 # `test-linux` runs the engine tests, and the GLib backport test with release
 # optimisations, on the same setup as ci.yml. `build-flatpak` is flatpak.yml,
@@ -76,8 +72,6 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-
-      - uses: ./.github/actions/setup-windows-gnu
 
       - name: Install tauri CLI
         run: npm ci
