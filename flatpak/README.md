@@ -1,6 +1,6 @@
 # Flatpak
 
-`dev.envarsa.Envarsa.yml` builds Envarsa as a Flatpak on the GNOME runtime. The app gets a Wayland window
+`io.github.terminalis.Envarsa.yml` builds Envarsa as a Flatpak on the GNOME runtime. The app gets a Wayland window
 (X11 as a fallback) and the GPU, and nothing else: no network, no filesystem access, no extra D-Bus names.
 Files come and go through the desktop portals.
 
@@ -25,8 +25,8 @@ flatpak install --user -y flathub org.flatpak.Builder
 From the repository root:
 
 ```sh
-flatpak run --command=flathub-build org.flatpak.Builder --install flatpak/dev.envarsa.Envarsa.yml
-flatpak run dev.envarsa.Envarsa
+flatpak run --command=flathub-build org.flatpak.Builder --install flatpak/io.github.terminalis.Envarsa.yml
+flatpak run io.github.terminalis.Envarsa
 ```
 
 `flathub-build` builds the way Flathub does, into `builddir/` and the OSTree repo `repo/`, with its cache in
@@ -34,14 +34,14 @@ flatpak run dev.envarsa.Envarsa
 like the one on GitHub Releases:
 
 ```sh
-flatpak build-bundle repo Envarsa.flatpak dev.envarsa.Envarsa \
+flatpak build-bundle repo Envarsa.flatpak io.github.terminalis.Envarsa \
   --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
 ```
 
 ## Lint
 
 ```sh
-flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest flatpak/dev.envarsa.Envarsa.yml
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest flatpak/io.github.terminalis.Envarsa.yml
 flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
 ```
 
@@ -51,10 +51,10 @@ Both should pass. The one known difference is the source: this manifest builds t
 
 ## Flathub
 
-The Flathub repository `flathub/dev.envarsa.Envarsa` holds a copy of the manifest and a `cargo-sources.json`.
+The Flathub repository `flathub/io.github.terminalis.Envarsa` holds a copy of the manifest and a `cargo-sources.json`.
 For each release:
 
-1. Copy `dev.envarsa.Envarsa.yml` from the release tag, and replace its `type: dir` source (and the comment
+1. Copy `io.github.terminalis.Envarsa.yml` from the release tag, and replace its `type: dir` source (and the comment
    above it) with the tag and the commit it points to:
 
    ```yaml

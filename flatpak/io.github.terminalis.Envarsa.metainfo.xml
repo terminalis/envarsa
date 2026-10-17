@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>dev.envarsa.Envarsa</id>
+  <id>io.github.terminalis.Envarsa</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
   <name>Envarsa</name>
   <summary>A local library for your .env files</summary>
-  <developer id="dev.envarsa">
+  <developer id="io.github.terminalis">
     <name>Envarsa</name>
   </developer>
 
@@ -36,7 +36,7 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">dev.envarsa.Envarsa.desktop</launchable>
+  <launchable type="desktop-id">io.github.terminalis.Envarsa.desktop</launchable>
   <provides>
     <binary>envarsa</binary>
   </provides>

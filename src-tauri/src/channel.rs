@@ -92,7 +92,7 @@ mod tests {
         let dir = crate::store::fixtures::tmp_dir("flatpak-info");
         let info = dir.join(".flatpak-info");
         assert!(!in_flatpak(&info));
-        std::fs::write(&info, "[Application]\nname=dev.envarsa.Envarsa\n").unwrap();
+        std::fs::write(&info, "[Application]\nname=io.github.terminalis.Envarsa\n").unwrap();
         assert!(in_flatpak(&info));
     }
 }

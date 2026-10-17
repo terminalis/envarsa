@@ -1,5 +1,5 @@
 {
-  "identifier": "dev.envarsa.Envarsa",
+  "identifier": "io.github.terminalis.Envarsa",
   "app": {
     "enableGTKAppId": true
   },
