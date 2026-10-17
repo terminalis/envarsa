@@ -72,7 +72,7 @@ flowchart LR
 | `.github/workflows/release.yml` | Tagged releases: the Windows installer and MSIX, the Flatpak bundle (through `flatpak.yml`), and the engine tests on Linux. The installer and the bundle are attached to the GitHub Release. |
 | `.github/workflows/flatpak.yml` | Builds and lints the Flatpak bundle in Flathub's CI image, on pull requests that touch the packaging or the dependencies, and for `release.yml`. |
 | `tools/package-msix.ps1`, `Package.appxmanifest`, `Assets/` | Microsoft Store packaging. |
-| `flatpak/`, `tools/flatpak-cargo-sources.sh` | The Flatpak: its manifest, desktop file and metainfo, and the script that lists every crate in `Cargo.lock` as a source for the offline build. On Linux the app identifier is `dev.envarsa.Envarsa` (`tauri.linux.conf.json`); Windows keeps `com.envarsa.app`. `flatpak/README.md` covers building, linting and Flathub. |
+| `flatpak/`, `tools/flatpak-cargo-sources.sh` | The Flatpak: its manifest, desktop file and metainfo, and the script that lists every crate in `Cargo.lock` as a source for the offline build. On Linux the app identifier is `io.github.terminalis.Envarsa` (`tauri.linux.conf.json`); Windows keeps `com.envarsa.app`. `flatpak/README.md` covers building, linting and Flathub. |
 | `website/` | envarsa.dev, published by `pages.yml`. |
 
 ## From the webview to disk

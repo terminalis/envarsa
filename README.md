@@ -24,7 +24,7 @@ with flatpak-builder from `flatpak/`; [flatpak/README.md](flatpak/README.md) cov
 it locally.
 
 The store lives in the app's data folder: `%APPDATA%\com.envarsa.app\` on Windows (installer and Store),
-`~/.var/app/dev.envarsa.Envarsa/data/` in the Flatpak, and `~/.local/share/dev.envarsa.Envarsa/` for a Linux dev
+`~/.var/app/io.github.terminalis.Envarsa/data/` in the Flatpak, and `~/.local/share/io.github.terminalis.Envarsa/` for a Linux dev
 build. `ENVARSA_STORE_PATH` overrides it; `ENVARSA_DEMO=1` seeds sample projects. Serving `ui/` from
 any static server opens the UI in a plain browser against canned responses (`ui/js/mock.js`).
 

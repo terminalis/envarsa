@@ -1,4 +1,4 @@
-id: dev.envarsa.Envarsa
+id: io.github.terminalis.Envarsa
 runtime: org.gnome.Platform
 runtime-version: '51'
 sdk: org.gnome.Sdk
@@ -24,12 +24,12 @@ modules:
       - cargo --offline fetch --manifest-path src-tauri/Cargo.toml --verbose
       - cargo --offline build --release --locked --manifest-path src-tauri/Cargo.toml
       - install -Dm755 src-tauri/target/release/envarsa /app/bin/envarsa
-      - install -Dm644 flatpak/dev.envarsa.Envarsa.desktop /app/share/applications/dev.envarsa.Envarsa.desktop
-      - install -Dm644 flatpak/dev.envarsa.Envarsa.metainfo.xml /app/share/metainfo/dev.envarsa.Envarsa.metainfo.xml
-      - install -Dm644 src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/dev.envarsa.Envarsa.png
-      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/dev.envarsa.Envarsa.png
-      - install -Dm644 src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/dev.envarsa.Envarsa.png
-      - install -Dm644 src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/dev.envarsa.Envarsa.png
+      - install -Dm644 flatpak/io.github.terminalis.Envarsa.desktop /app/share/applications/io.github.terminalis.Envarsa.desktop
+      - install -Dm644 flatpak/io.github.terminalis.Envarsa.metainfo.xml /app/share/metainfo/io.github.terminalis.Envarsa.metainfo.xml
+      - install -Dm644 src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/io.github.terminalis.Envarsa.png
+      - install -Dm644 src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/io.github.terminalis.Envarsa.png
+      - install -Dm644 src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/io.github.terminalis.Envarsa.png
+      - install -Dm644 src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/io.github.terminalis.Envarsa.png
     sources:
       # This checkout. The Flathub copy of this manifest uses the release tag
       # instead (see README.md).

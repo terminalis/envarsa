@@ -61,8 +61,8 @@ jobs:
         env:
           VERSION: ${{ steps.read.outputs.version }}
         run: |
-          if ! grep -qF "<release version=\"$VERSION\"" flatpak/dev.envarsa.Envarsa.metainfo.xml; then
-            echo "flatpak/dev.envarsa.Envarsa.metainfo.xml has no <release version=\"$VERSION\"> entry" >&2
+          if ! grep -qF "<release version=\"$VERSION\"" flatpak/io.github.terminalis.Envarsa.metainfo.xml; then
+            echo "flatpak/io.github.terminalis.Envarsa.metainfo.xml has no <release version=\"$VERSION\"> entry" >&2
             exit 1
           fi
 
