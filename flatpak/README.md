@@ -47,25 +47,11 @@ flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
 
 Both should pass. The one known difference is the source: this manifest builds the checkout it sits in
 (`type: dir`), which the linter accepts everywhere except on Flathub's own servers, where it reports
-`module-envarsa-source-dir-not-allowed`. That's why the Flathub copy uses the release tag instead.
+`module-envarsa-source-dir-not-allowed`.
 
-## Flathub
+## Distribution
 
-The Flathub repository `flathub/io.github.terminalis.Envarsa` holds a copy of the manifest and a `cargo-sources.json`.
-For each release:
-
-1. Copy `io.github.terminalis.Envarsa.yml` from the release tag, and replace its `type: dir` source (and the comment
-   above it) with the tag and the commit it points to:
-
-   ```yaml
-         - type: git
-           url: https://github.com/terminalis/envarsa.git
-           tag: v2.0.0
-           commit: <full commit hash of v2.0.0>
-   ```
-
-2. Replace `cargo-sources.json` with the one from the release run's `cargo-sources` artifact, so it matches the
-   tag's `Cargo.lock`.
-
-Flathub's generative-AI policy requires the submission and these update pull requests, including their
-descriptions, commit messages and review replies, to be written by the owner rather than an AI tool.
+Each release attaches the bundle to its GitHub Release, then starts `publish.yml` in
+[terminalis/flatpak](https://github.com/terminalis/flatpak). That workflow imports the bundle into the signed
+repository that Flatpak installs update from (`https://terminalis.github.io/flatpak/repo`). The bundle on its
+own installs without updates.

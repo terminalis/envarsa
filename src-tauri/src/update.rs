@@ -194,7 +194,7 @@ pub struct UpdateCheckResult {
 pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheckResult, String> {
     if channel::current().updates_externally() {
         return Err(
-            "This build updates through the Microsoft Store or Flathub, so the in-app check is off."
+            "This build updates through the Microsoft Store or Flatpak, so the in-app check is off."
                 .into(),
         );
     }

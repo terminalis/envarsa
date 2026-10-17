@@ -94,6 +94,8 @@
         The update check exists only in the portable downloads from GitHub Releases (the Windows exe and
         the AppImage). The <strong>Microsoft Store
         and Flatpak builds make no network connection at all</strong>; the Flatpak has no network permission.
+        Flatpak itself, outside the app, downloads new versions from <code>terminalis.github.io</code>
+        (GitHub Pages), as it does from any Flatpak source; nothing from your library is involved.
       </p>
     </div>
     <p>When it runs, the update check makes <strong>one HTTPS GET</strong> to:</p>

@@ -9,11 +9,9 @@
 # linter (the same one org.flatpak.Builder runs) and the runtime installed.
 # --privileged lets flatpak-builder set up its build sandbox.
 #
-# Screenshots are mirrored to dl.flathub.org/media, as on Flathub; the repo
-# lint fails without it.
-#
-# cargo-sources.json is uploaded as well: the Flathub repository's copy must
-# match the release tag's Cargo.lock (flatpak/README.md).
+# Screenshots keep the metainfo's envarsa.dev URLs, which software centers
+# load directly. flatpak/lint-exceptions.json waives the repo lint's
+# Flathub-only screenshot checks.
 
 name: flatpak
 
@@ -60,14 +58,7 @@ jobs:
           bundle: Envarsa_${{ steps.read.outputs.version }}_x86_64.flatpak
           artifact-name: envarsa-flatpak-x86_64
           build-dir: builddir
-          mirror-screenshots-url: https://dl.flathub.org/media
           cache-key: flatpak-builder-${{ hashFiles('flatpak/io.github.terminalis.Envarsa.yml', 'src-tauri/Cargo.lock') }}
 
       - name: Lint the build
-        run: flatpak-builder-lint repo repo
-
-      - name: Attach cargo-sources.json to the run
-        uses: actions/upload-artifact@v7
-        with:
-          name: cargo-sources
-          path: flatpak/cargo-sources.json
+        run: flatpak-builder-lint --exceptions --user-exceptions flatpak/lint-exceptions.json repo repo

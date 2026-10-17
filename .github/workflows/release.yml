@@ -13,7 +13,7 @@
 #
 # `version` refuses a tag that doesn't match Cargo.toml, and any version
 # without a <release> entry in the Flatpak metainfo: AppStream lists each
-# release with its date, and Flathub shows them.
+# release with its date, and software centers show them.
 #
 # The Windows build uses the runner's preinstalled MSVC Rust and Visual
 # Studio, as ci.yml does. On MSVC the WebView2 loader is linked into the exe,
@@ -25,6 +25,10 @@
 # it runs on Ubuntu 22.04+, Debian 12+ and peers. When GitHub retires that
 # image, move to the next one and accept the newer floor. `build-flatpak` is
 # flatpak.yml, which builds the bundle in Flathub's CI image and lints it.
+#
+# After publishing, `publish` redeploys the website and starts
+# terminalis/flatpak's publish.yml, which adds the new bundle to the signed
+# Flatpak repository that Flatpak installs update from.
 
 name: release
 
@@ -157,7 +161,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: [version, build-windows, build-linux, build-flatpak]
-    # actions: write lets the last step start pages.yml.
+    # actions: write lets the website step start pages.yml.
     permissions:
       contents: write
       actions: write
@@ -191,3 +195,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+      # The Flatpak repository (terminalis/flatpak) imports each release's
+      # bundle. GITHUB_TOKEN can't start workflows in another repo, so this
+      # uses a separate token.
+      - name: Add the bundle to the Flatpak repository
+        env:
+          GH_TOKEN: ${{ secrets.FLATPAK_REPO_TOKEN }}
+        run: gh workflow run publish.yml --repo terminalis/flatpak --ref main
