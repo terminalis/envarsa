@@ -80,6 +80,20 @@
   </supports>
 
   <releases>
+    <release version="2.1.0" date="2026-10-17">
+      <description>
+        <p>
+          The Flatpak's ID is now io.github.terminalis.Envarsa, ahead of its Flathub listing, so it installs
+          as a separate app from the 2.0 bundle. To keep your library, export it from the old app's Settings,
+          import it into the new one, then run flatpak uninstall dev.envarsa.Envarsa.
+        </p>
+        <p>
+          The portable Windows exe and the AppImage are back. Each keeps its library in an Envarsa Data folder
+          beside it and offers on first run to copy the library an installed copy kept. The Windows installer
+          is no longer published.
+        </p>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-10-01">
       <description>
         <p>
