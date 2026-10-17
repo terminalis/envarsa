@@ -34,15 +34,20 @@ fn main() {
             let config_path = state::config_file_path(app.handle());
             let config = state::load_config(&config_path);
             let (store_path, env_override) = state::resolve_store_path(app.handle(), &config);
+            // A downloaded build's first run: the UI offers once to copy
+            // the library an installed copy kept. This runs before
+            // init_session, which creates the store file.
+            let installed_store = if state::portable_dir().is_some() && !store_path.exists() {
+                state::installed_store(app.handle())
+            } else {
+                None
+            };
             let mut session = state::init_session(&store_path);
             state::maybe_seed_demo(&mut session, &store_path);
-            *app.state::<AppState>().0.lock().unwrap() = Some(state::Inner::new(
-                store_path,
-                config_path,
-                config,
-                env_override,
-                session,
-            ));
+            let mut inner =
+                state::Inner::new(store_path, config_path, config, env_override, session);
+            inner.installed_store = installed_store;
+            *app.state::<AppState>().0.lock().unwrap() = Some(inner);
             // No-op unless the user opted in (Settings → About).
             update::maybe_spawn_auto_check(app.handle().clone());
             #[cfg(windows)]
@@ -87,6 +92,7 @@ fn main() {
             commands::session::disable_encryption,
             commands::transfer::reveal_store,
             commands::transfer::move_store_to_default,
+            commands::transfer::copy_installed_store,
             update::check_for_updates,
             update::set_auto_update_check,
             update::open_releases_page,

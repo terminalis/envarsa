@@ -11,7 +11,8 @@ use std::sync::OnceLock;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Channel {
-    /// The installer from GitHub Releases, or a development build.
+    /// A download from GitHub Releases (the portable exe or AppImage), or
+    /// a development build.
     Direct,
     #[cfg_attr(not(windows), allow(dead_code))]
     MicrosoftStore,

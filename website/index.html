@@ -361,8 +361,9 @@
         <details class="row">
           <summary><h3>Nothing is uploaded</h3><span class="say">There&rsquo;s no account and no server. Envarsa works entirely offline.</span><span class="mark" aria-hidden="true"></span></summary>
           <div class="more"><div>
-            <p>The only network request it can make is a check for new versions, and only the Windows installer
-            has it. It runs when you click Check for updates in Settings, or by itself if you turn that on there.
+            <p>The only network request it can make is a check for new versions, and only the portable
+            downloads from GitHub (the Windows exe and the AppImage) have it. It runs when you click Check for
+            updates in Settings, or by itself if you turn that on there.
             It asks GitHub (<code>api.github.com</code>) for the latest version number and sends nothing else,
             and nothing downloads or installs itself. The Microsoft Store and Flatpak versions make no network
             requests at all.</p>
@@ -388,10 +389,12 @@
         <details class="row">
           <summary><h3>Your library is one file you can read</h3><span class="say">Plain JSON on your disk, with an optional passphrase.</span><span class="mark" aria-hidden="true"></span></summary>
           <div class="more"><div>
-            <p>The file lives in the app&rsquo;s data folder: <code>%APPDATA%\com.envarsa.app\</code> on Windows,
-            <code>~/.var/app/io.github.terminalis.Envarsa/data/</code> in the Flatpak. Every save writes a temporary file
-            and swaps it in, keeping the previous version as a <code>.bak</code>. If the file is ever damaged,
-            Envarsa offers the backup when it starts.</p>
+            <p>The portable downloads keep the file in an <code>Envarsa Data</code> folder beside the program, so
+            the library travels with it. The Microsoft Store version keeps it in
+            <code>%APPDATA%\com.envarsa.app\</code>, the Flatpak in
+            <code>~/.var/app/io.github.terminalis.Envarsa/data/</code>. Every save writes a temporary file and
+            swaps it in, keeping the previous version beside it as a <code>.bak</code>. If the file is ever
+            damaged, Envarsa offers to restore that previous version.</p>
             <p>You can protect it with a passphrase in the standard
             <a href="https://age-encryption.org" rel="noopener">age</a> format, which the <code>age</code>
             command-line tool can also open. A lost passphrase can&rsquo;t be recovered, which is why it&rsquo;s
@@ -453,17 +456,20 @@
       <div class="dl-grid">
         <div class="dl-card">
           <h3>Windows 10/11</h3>
-          <p>The Microsoft Store version is signed and updates itself. The installer needs no admin rights but
-          doesn&rsquo;t update itself; turn on the update check in Settings to hear about new versions.</p>
+          <p>The Microsoft Store version is signed and updates itself. The portable exe needs no installing and
+          keeps your library in an <code>Envarsa Data</code> folder beside it, so you can carry both on a USB
+          stick. It doesn&rsquo;t update itself; turn on the update check in Settings to hear about new
+          versions, and save each new one into the same folder.</p>
           <div class="dl-btns">
             <a class="btn btn-primary" href="https://apps.microsoft.com/detail/9NQCBXD2WQ2M" rel="noopener">Microsoft Store</a>
-            <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Installer</a>
+            <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/download/v{{version}}/Envarsa_{{version}}_x64.exe" rel="noopener">Portable .exe</a>
           </div>
         </div>
         <div class="dl-card">
           <h3>Linux</h3>
-          <p>Download the bundle, then install it from the folder you saved it to. Updates must be
-          installed manually.</p>
+          <p>Download the Flatpak bundle, then install it from the folder you saved it to. Or take the
+          portable AppImage: make it executable and run it, and it keeps your library beside it. Neither
+          updates itself.</p>
           <div class="dl-cmd-wrap">
             <pre class="dl-cmd"><code id="flatpak-cmd">flatpak install --user ./Envarsa_x.y.z_x86_64.flatpak</code></pre>
             <button class="copy-btn" type="button" data-copy="flatpak-cmd" aria-label="Copy command" title="Copy" hidden>
@@ -473,12 +479,13 @@
           </div>
           <div class="dl-btns">
             <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Flatpak</a>
+            <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/download/v{{version}}/Envarsa_{{version}}_amd64.AppImage" rel="noopener">AppImage</a>
           </div>
         </div>
       </div>
       <p class="dl-warn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
-        <span><span class="sr-only">Warning: </span>Always remember to export a copy of your library before uninstalling the program.</span>
+        <span><span class="sr-only">Warning: </span>Always remember to export a copy of your library before uninstalling the program or deleting its folder.</span>
       </p>
     </div>
   </section>

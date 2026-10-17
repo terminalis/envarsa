@@ -689,6 +689,34 @@ fn a_custom_location_moves_to_the_default_and_leaves_the_old_file() {
 }
 
 #[test]
+fn an_installed_copys_library_is_copied_once_and_left_in_place() {
+    let env = Env::new("cmd-copy-installed");
+    let installed = env.path("installed.store");
+    let mut old = store::fixtures::store_of(vec![store::fixtures::project("alpha", "A=1\n")]);
+    store::save(&mut old, &installed, None).unwrap();
+    env.state()
+        .with(|inner| {
+            inner.installed_store = Some(installed.clone());
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        env.status()["installedStore"],
+        installed.to_string_lossy().as_ref()
+    );
+    assert_eq!(env.status()["projectCount"], 0);
+
+    transfer::copy_installed_store(env.state()).unwrap();
+    let st = env.status();
+    assert_eq!(st["projectCount"], 1);
+    assert!(st["installedStore"].is_null(), "offered once");
+    assert!(installed.exists(), "the installed copy's file stays");
+
+    let err = transfer::copy_installed_store(env.state()).refused();
+    assert!(err.contains("no installed library"), "{err}");
+}
+
+#[test]
 fn moving_the_store_is_refused_under_the_env_var() {
     let env = Env::new("cmd-move-env");
     let default = at_custom_location(&env);

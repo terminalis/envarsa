@@ -29,6 +29,9 @@ pub struct StatusPayload {
     /// the env var doesn't override that). The UI offers to move it to
     /// the default location then.
     pub custom_location: bool,
+    /// An installed copy's store, which a downloaded build offers to copy
+    /// on its first run (`copy_installed_store`).
+    pub installed_store: Option<String>,
     pub backup_exists: bool,
     pub project_count: Option<usize>,
     pub error: Option<String>,
@@ -68,6 +71,10 @@ fn status_of(inner: &Inner) -> StatusPayload {
                 .store_path
                 .as_deref()
                 .is_some_and(|p| !p.trim().is_empty()),
+        installed_store: inner
+            .installed_store
+            .as_ref()
+            .map(|p| p.to_string_lossy().to_string()),
         backup_exists: store::backup_path(&inner.store_path).exists(),
         project_count,
         error,
@@ -182,7 +189,7 @@ fn enable(inner: &mut Inner, passphrase: String) -> R<()> {
         store,
         held,
         Some(passphrase),
-        "the store is encrypted, but the old plaintext backup survived",
+        "the store is encrypted, but its previous version (.bak) is still plaintext",
     )
 }
 
@@ -197,7 +204,7 @@ fn change(inner: &mut Inner, current: String, new_passphrase: String) -> R<()> {
         store,
         held,
         Some(new_passphrase),
-        "the passphrase was changed, but the backup still uses the old one",
+        "the passphrase was changed, but the previous version (.bak) still uses the old one",
     )
 }
 
@@ -213,7 +220,7 @@ fn disable(inner: &mut Inner, passphrase: String) -> R<()> {
         store,
         held,
         None,
-        "the store is decrypted, but the backup could not be rewritten",
+        "the store is decrypted, but the previous version (.bak) could not be rewritten",
     )
 }
 
@@ -238,23 +245,23 @@ pub fn disable_encryption(state: State<'_, AppState>, passphrase: String) -> R<(
 
 /// Restoring is only offered (and only allowed) when the store cannot
 /// be loaded — on a healthy session it would be a silent rollback, and
-/// on an encrypted one a possible downgrade to whatever the backup
-/// holds.
+/// on an encrypted one a possible downgrade to whatever the previous
+/// version holds.
 #[tauri::command]
 pub fn restore_backup(state: State<'_, AppState>) -> R<StatusPayload> {
     state.with(|inner| {
         if !matches!(inner.session, Session::Corrupt { .. }) {
             return Err(
-                "the store loaded fine — restoring the backup is only for when it cannot be read"
+                "the store loaded fine — restoring the previous version is only for when it cannot be read"
                     .into(),
             );
         }
         let bak = store::backup_path(&inner.store_path);
         if !bak.exists() {
-            return Err("no backup file exists next to the store".into());
+            return Err("no previous version (.bak) exists next to the store".into());
         }
         fs::copy(&bak, &inner.store_path)
-            .map_err(|e| format!("could not restore the backup: {e}"))?;
+            .map_err(|e| format!("could not restore the previous version: {e}"))?;
         inner.session = state::init_session(&inner.store_path);
         Ok(status_of(inner))
     })
