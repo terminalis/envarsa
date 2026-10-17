@@ -87,6 +87,11 @@
     },
     {
       "@type": "Question",
+      "name": "I installed the Flatpak bundle. How do I get updates?",
+      "acceptedAnswer": { "@type": "Answer", "text": "The .flatpak file doesn't update. Run flatpak uninstall --user io.github.terminalis.Envarsa, then the Linux install command under Download. Your library stays, and new versions then arrive through flatpak update and your software center." }
+    },
+    {
+      "@type": "Question",
       "name": "Is it free?",
       "acceptedAnswer": { "@type": "Answer", "text": "Yes. Envarsa is MIT-licensed and the source is on GitHub. It's built with Rust and Tauri 2." }
     }
@@ -366,7 +371,7 @@
             updates in Settings, or by itself if you turn that on there.
             It asks GitHub (<code>api.github.com</code>) for the latest version number and sends nothing else,
             and nothing downloads or installs itself. The Microsoft Store and Flatpak versions make no network
-            requests at all.</p>
+            requests at all; the Store and Flatpak fetch their updates themselves.</p>
           </div></div>
         </details>
         <details class="row">
@@ -436,6 +441,15 @@
           </div></div>
         </details>
         <details class="row">
+          <summary><h3>I installed the Flatpak bundle. How do I get updates?</h3><span class="mark" aria-hidden="true"></span></summary>
+          <div class="more"><div>
+            <p>The <code>.flatpak</code> file doesn&rsquo;t update. Run
+            <code>flatpak uninstall --user io.github.terminalis.Envarsa</code>, then the Linux install command
+            under <a href="#download">Download</a>. Your library stays, and new versions then arrive through
+            <code>flatpak update</code> and your software center.</p>
+          </div></div>
+        </details>
+        <details class="row">
           <summary><h3>Is it free?</h3><span class="mark" aria-hidden="true"></span></summary>
           <div class="more"><div>
             <p>Yes. Envarsa is MIT-licensed and the source is on
@@ -467,18 +481,18 @@
         </div>
         <div class="dl-card">
           <h3>Linux</h3>
-          <p>Download the Flatpak bundle, then install it from the folder you saved it to. Or take the
-          portable AppImage: make it executable and run it, and it keeps your library beside it. Neither
-          updates itself.</p>
+          <p>Install the Flatpak with this command, or open the Flatpak button&rsquo;s file in your software
+          center; it then updates with your other apps. Or take the portable AppImage, which keeps your
+          library beside it.</p>
           <div class="dl-cmd-wrap">
-            <pre class="dl-cmd"><code id="flatpak-cmd">flatpak install --user ./Envarsa_x.y.z_x86_64.flatpak</code></pre>
+            <pre class="dl-cmd"><code id="flatpak-cmd">flatpak install --user https://terminalis.github.io/flatpak/envarsa.flatpakref</code></pre>
             <button class="copy-btn" type="button" data-copy="flatpak-cmd" aria-label="Copy command" title="Copy" hidden>
               <svg class="idle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               <svg class="done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
             </button>
           </div>
           <div class="dl-btns">
-            <a class="btn btn-primary" href="https://github.com/terminalis/envarsa/releases/latest" rel="noopener">Flatpak</a>
+            <a class="btn btn-primary" href="https://terminalis.github.io/flatpak/envarsa.flatpakref" rel="noopener">Flatpak</a>
             <a class="btn btn-ghost" href="https://github.com/terminalis/envarsa/releases/download/v{{version}}/Envarsa_{{version}}_amd64.AppImage" rel="noopener">AppImage</a>
           </div>
         </div>

@@ -64,8 +64,7 @@ function aboutSection(st, m) {
   if (st.channel === 'flatpak') {
     return `
       ${aboutText(st, ', and no network calls.')}
-      <p class="hint">Installed as a Flatpak. This build has no network access; updates come through Flathub. Installed the <span class="mono">.flatpak</span> file from GitHub? New releases are on the releases page.</p>
-      <div class="settings-actions"><button class="btn" data-act="open-releases">Open releases page</button></div>`;
+      <p class="hint">Installed as a Flatpak. This build has no network access. Installed from the terminalis repository, it updates through <span class="mono">flatpak update</span> or your software center. Installed from a <span class="mono">.flatpak</span> file, it doesn't update — the FAQ on envarsa.dev shows how to switch it, and your library stays.</p>`;
   }
   return `
       ${aboutText(st, ' — the only thing that ever leaves is an update check you trigger or opt into below: one request to GitHub for the latest release number.')}

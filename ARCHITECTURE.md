@@ -69,10 +69,10 @@ flowchart LR
 |---|---|
 | `tools/check-contract.sh` | Checks that `api.js` and the command list match, that the mock answers every command, that emitted and handled events match, and that every `data-*` key has a handler. |
 | `.github/workflows/ci.yml` | On every pull request: `cargo fmt --check`, `cargo test` and the contract script on Linux, and `cargo test` on Windows. |
-| `.github/workflows/release.yml` | Tagged releases: the portable Windows exe and the MSIX, the engine tests and the AppImage on Linux, and the Flatpak bundle (through `flatpak.yml`). The exe, the AppImage and the bundle are attached to the GitHub Release. |
+| `.github/workflows/release.yml` | Tagged releases: the portable Windows exe and the MSIX, the engine tests and the AppImage on Linux, and the Flatpak bundle (through `flatpak.yml`). The exe, the AppImage and the bundle are attached to the GitHub Release. After publishing, it redeploys the website and starts `terminalis/flatpak`'s `publish.yml`, which adds the bundle to the signed Flatpak repository. |
 | `.github/workflows/flatpak.yml` | Builds and lints the Flatpak bundle in Flathub's CI image, on pull requests that touch the packaging or the dependencies, and for `release.yml`. |
 | `tools/package-msix.ps1`, `Package.appxmanifest`, `Assets/` | Microsoft Store packaging. |
-| `flatpak/`, `tools/flatpak-cargo-sources.sh` | The Flatpak: its manifest, desktop file and metainfo, and the script that lists every crate in `Cargo.lock` as a source for the offline build. On Linux the app identifier is `io.github.terminalis.Envarsa` (`tauri.linux.conf.json`); Windows keeps `com.envarsa.app`. `flatpak/README.md` covers building, linting and Flathub. |
+| `flatpak/`, `tools/flatpak-cargo-sources.sh` | The Flatpak: its manifest, desktop file and metainfo, and the script that lists every crate in `Cargo.lock` as a source for the offline build. On Linux the app identifier is `io.github.terminalis.Envarsa` (`tauri.linux.conf.json`); Windows keeps `com.envarsa.app`. `flatpak/README.md` covers building, linting and how the bundle reaches users. |
 | `website/` | envarsa.dev, published by `pages.yml`, which fills the newest release's version into the download links; `release.yml` redeploys it after each release. |
 
 ## From the webview to disk
@@ -161,7 +161,7 @@ place that enforces a rule names it in a comment.
 | **ATOMIC-WRITES** | The store, `config.json` and `.env.local` are written through a temp file, fsync and rename, so a crash can't leave a torn file. The store keeps a `.bak` of its previous version. | `store::write_atomic`, `store::save` |
 | **MEMORY-FOLLOWS-DISK** | The live store changes only after its save succeeds. A protection change adopts the new passphrase only after saving under it. | `commands::mutate`, `session::reprotect` |
 | **BACKUP-MATCHES-PROTECTION** | After encryption is turned on, changed or turned off, the `.bak` is rewritten under the new protection, so no plaintext copy survives encrypting. | `store::align_backup` via `reprotect` |
-| **ONE-EGRESS** | The update check is the only network code. It runs only when the user clicks "Check for updates", or when they have turned on the automatic check. It uses HTTPS only, follows no redirects, reads at most 256 KB, and parses the tag strictly. The automatic check runs at most once every 24 h and stamps the time before fetching, so a failing network can't cause a retry storm. It is off in Microsoft Store and Flatpak builds; the Flatpak build has no network permission. | `update.rs`, `channel.rs` |
+| **ONE-EGRESS** | The update check is the only network code. It runs only when the user clicks "Check for updates", or when they have turned on the automatic check. It uses HTTPS only, follows no redirects, reads at most 256 KB, and parses the tag strictly. The automatic check runs at most once every 24 h and stamps the time before fetching, so a failing network can't cause a retry storm. It is off in Microsoft Store and Flatpak builds; the Flatpak build has no network permission; flatpak itself, outside the sandbox, fetches its updates from the repository at terminalis.github.io/flatpak. | `update.rs`, `channel.rs` |
 
 Two more rules support these:
 

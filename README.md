@@ -3,7 +3,7 @@
 A local-first store for your `.env` files — capture, recall masked, hand back by clipboard or export. One
 JSON file on disk; no cloud, no telemetry, no egress except an opt-in update check (off by default).
 
-[Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M) · [Flatpak](https://github.com/terminalis/envarsa/releases/latest)
+[Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M) · [Flatpak](https://envarsa.dev/#download)
 
 ## Build
 
@@ -45,7 +45,10 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
 - To update either one, save the new file into the same folder; it picks up the same `Envarsa Data`, and the old
   file can be deleted.
 - **Microsoft Store:** the MSIX from the release run, uploaded to Partner Center.
-- **Flatpak:** `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases now, and on Flathub once it passes review.
+- **Flatpak:** `flatpak install --user https://terminalis.github.io/flatpak/envarsa.flatpakref` installs from
+  the signed repository in [terminalis/flatpak](https://github.com/terminalis/flatpak), so `flatpak update`
+  and software centers pick up each release. `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases installs the
+  same app from a file, without updates.
 
 A version tag runs `.github/workflows/release.yml`, which builds all four and publishes the exe, the AppImage
 and the Flatpak bundle.
