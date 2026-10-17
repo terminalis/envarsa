@@ -30,16 +30,14 @@ $makeappx = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse 
   Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
 if (-not $makeappx) { throw 'makeappx.exe not found. Install the Windows SDK (App Cert Kit / SDK).' }
 
-foreach ($f in @((Join-Path $rel 'envarsa.exe'), (Join-Path $rel 'WebView2Loader.dll'))) {
-  if (-not (Test-Path $f)) { throw "Missing build artifact: $f (run the release build first)." }
-}
+$exe = Join-Path $rel 'envarsa.exe'
+if (-not (Test-Path $exe)) { throw "Missing build artifact: $exe (run the release build first)." }
 
 # Assemble a clean payload (do not reuse dist\ to avoid stale files).
 $payload = Join-Path $env:TEMP 'envarsa-msix-payload'
 if (Test-Path $payload) { Remove-Item $payload -Recurse -Force }
 New-Item -ItemType Directory -Force $payload | Out-Null
-Copy-Item (Join-Path $rel 'envarsa.exe') $payload
-Copy-Item (Join-Path $rel 'WebView2Loader.dll') $payload
+Copy-Item $exe $payload
 Copy-Item (Join-Path $root 'Assets') (Join-Path $payload 'Assets') -Recurse
 
 # Copy the manifest into the payload, setting the Identity version to $ver.
