@@ -4,10 +4,12 @@
 //!   1. `ENVARSA_STORE_PATH` env var (power users, tests)
 //!   2. `store_path` in the app config file (set through Settings by
 //!      earlier versions; Settings now only offers to move the store back)
-//!   3. the default location, `<app data dir>/envarsa.store` (in the
-//!      Flatpak, the sandbox's own data dir).
+//!   3. the default location: `Envarsa Data/envarsa.store` beside a
+//!      downloaded build (the exe, or the AppImage file), otherwise
+//!      `<app data dir>/envarsa.store` (in the Flatpak, the sandbox's own
+//!      data dir).
 
-use crate::channel;
+use crate::channel::{self, Channel};
 use crate::store::{self, Opened, Snapshot, Store};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -15,7 +17,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::Manager;
 
-/// User preferences, persisted as `config.json` in the app config dir.
+/// User preferences, persisted as `config.json` in the app config dir, or
+/// in `Envarsa Data` beside a downloaded build.
 /// Regenerable (unlike the store), so reads are forgiving. Saved
 /// atomically, as a whole struct — a partial write here once
 /// clobbered settings that other code paths had set.
@@ -39,7 +42,39 @@ pub struct Config {
     pub rest: serde_json::Map<String, serde_json::Value>,
 }
 
+/// The folder a downloaded build keeps `config.json` and the store in.
+const DATA_FOLDER: &str = "Envarsa Data";
+
+/// Where a downloaded build keeps its library: `Envarsa Data` beside the
+/// program, so the library travels with it. None for the Microsoft Store
+/// and Flatpak builds and for dev builds, which keep the per-user folders.
+pub fn portable_dir() -> Option<PathBuf> {
+    let downloaded = !cfg!(debug_assertions) && channel::current() == Channel::Direct;
+    portable_dir_with(
+        downloaded,
+        std::env::var_os("APPIMAGE").map(PathBuf::from),
+        std::env::current_exe().ok(),
+    )
+}
+
+/// An AppImage runs from a temporary mount, so its program is the
+/// `.AppImage` file the runtime names in `APPIMAGE`, not the running exe.
+fn portable_dir_with(
+    downloaded: bool,
+    appimage: Option<PathBuf>,
+    exe: Option<PathBuf>,
+) -> Option<PathBuf> {
+    if !downloaded {
+        return None;
+    }
+    let program = appimage.or(exe)?;
+    Some(program.parent()?.join(DATA_FOLDER))
+}
+
 pub fn config_file_path(app: &tauri::AppHandle) -> PathBuf {
+    if let Some(dir) = portable_dir() {
+        return dir.join("config.json");
+    }
     let path = app.path();
     // A Flatpak's config dir is already its own, so the identifier
     // subfolder app_config_dir adds would be redundant there.
@@ -149,6 +184,9 @@ pub struct Inner {
     /// win again on the next start.
     pub env_override: bool,
     pub session: Session,
+    /// The store an installed copy kept, offered once on a downloaded
+    /// build's first run; cleared once copied.
+    pub installed_store: Option<PathBuf>,
     /// At most one import is in flight; a new pick replaces it.
     pending_import: Option<PendingFile>,
     /// The `.env` file last picked or dropped for capture, so a capture
@@ -178,6 +216,7 @@ impl Inner {
             config,
             env_override,
             session,
+            installed_store: None,
             pending_import: None,
             pending_source: None,
             pending_target: None,
@@ -254,9 +293,13 @@ impl AppState {
 }
 
 /// Where the store lives unless something overrides it:
+/// `Envarsa Data/envarsa.store` beside a downloaded build,
 /// `<app data dir>/envarsa.store`, or `<data dir>/envarsa.store` in the
 /// Flatpak.
 pub fn default_store_path(app: &tauri::AppHandle) -> PathBuf {
+    if let Some(dir) = portable_dir() {
+        return dir.join("envarsa.store");
+    }
     let path = app.path();
     // A Flatpak's data dir is already its own (~/.var/app/<id>/data), so
     // the identifier subfolder app_data_dir adds would be redundant there.
@@ -299,6 +342,29 @@ fn resolve_store_path_with(
     }
 
     (default, false)
+}
+
+/// The identifier installed builds used: the Windows installer, and the
+/// AppImage and .deb before 2.0.
+const INSTALLED_ID: &str = "com.envarsa.app";
+
+/// The store an installed copy of Envarsa kept, if there is one, for a
+/// downloaded build to offer copying on its first run.
+pub fn installed_store(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let path = app.path();
+    installed_store_in(&path.data_dir().ok()?, &path.config_dir().ok()?)
+}
+
+/// `<data dir>/com.envarsa.app/envarsa.store`, or wherever that copy's
+/// `config.json` says an earlier version moved it.
+fn installed_store_in(data_dir: &Path, config_dir: &Path) -> Option<PathBuf> {
+    let config = load_config(&config_dir.join(INSTALLED_ID).join("config.json"));
+    let (path, _) = resolve_store_path_with(
+        None,
+        config.store_path.as_deref(),
+        data_dir.join(INSTALLED_ID).join("envarsa.store"),
+    );
+    path.exists().then_some(path)
 }
 
 /// Load the store file into a session. A missing file means first run:
@@ -470,6 +536,55 @@ mod tests {
         let (p, locked) = resolve_store_path_with(Some("   ".into()), Some(" "), default.clone());
         assert_eq!(p, default);
         assert!(!locked);
+    }
+
+    #[test]
+    fn downloaded_builds_keep_their_data_beside_the_program() {
+        let exe = Path::new("stick").join("Envarsa_2.1.0_x64.exe");
+        let appimage = Path::new("apps").join("Envarsa_2.1.0_amd64.AppImage");
+        assert_eq!(
+            portable_dir_with(true, None, Some(exe.clone())),
+            Some(Path::new("stick").join("Envarsa Data"))
+        );
+        assert_eq!(
+            portable_dir_with(true, Some(appimage), Some(exe.clone())),
+            Some(Path::new("apps").join("Envarsa Data")),
+            "an AppImage runs from a temporary mount; its data sits beside the .AppImage file"
+        );
+        assert_eq!(
+            portable_dir_with(false, None, Some(exe)),
+            None,
+            "Store, Flatpak and dev builds keep the per-user folders"
+        );
+    }
+
+    #[test]
+    fn an_installed_copys_store_is_found_where_it_kept_it() {
+        let dir = tmp_dir("installed");
+        let (data, config) = (dir.join("data"), dir.join("config"));
+        assert_eq!(
+            installed_store_in(&data, &config),
+            None,
+            "nothing installed"
+        );
+
+        let default = data.join("com.envarsa.app").join("envarsa.store");
+        fs::create_dir_all(default.parent().unwrap()).unwrap();
+        fs::write(&default, "{}").unwrap();
+        assert_eq!(installed_store_in(&data, &config), Some(default));
+
+        // A store an earlier version's Settings moved elsewhere.
+        let moved = dir.join("sync").join("envarsa.store");
+        fs::create_dir_all(moved.parent().unwrap()).unwrap();
+        fs::write(&moved, "{}").unwrap();
+        let cfg = Config {
+            store_path: Some(moved.to_string_lossy().into_owned()),
+            ..Config::default()
+        };
+        save_config(&config.join("com.envarsa.app").join("config.json"), &cfg).unwrap();
+        assert_eq!(installed_store_in(&data, &config), Some(moved));
+
+        fs::remove_dir_all(dir).ok();
     }
 
     #[test]

@@ -393,7 +393,8 @@ pub fn save(store: &mut Store, path: &Path, passphrase: Option<&str>) -> Result<
         None => bytes,
     };
     if path.exists() {
-        fs::copy(path, backup_path(path)).map_err(|e| format!("could not write backup: {e}"))?;
+        fs::copy(path, backup_path(path))
+            .map_err(|e| format!("could not keep the previous version (.bak): {e}"))?;
     }
     write_atomic(path, &bytes)
 }

@@ -7,7 +7,7 @@
 import { api, onEvent } from './api.js';
 import { esc, errText } from './util.js';
 import {
-  S, $, MODALS, mountViews, renderModal, renderPopover, closeModal, toast, boot,
+  S, $, MODALS, mountViews, renderModal, renderPopover, openModal, closeModal, toast, boot,
 } from './app.js';
 import * as library from './features/library.js';
 import * as capture from './features/capture.js';
@@ -135,6 +135,7 @@ window.addEventListener('unhandledrejection', (e) =>
 (async function start() {
   try {
     await boot();
+    if (S.status?.installedStore) openModal({ kind: 'copy-installed', busy: false });
     api.uiLog('info', `ui ready — state=${S.status?.state}, projects=${S.projects.length}`);
   } catch (err) {
     api.uiLog('error', `boot failed: ${errText(err)}`);

@@ -1,10 +1,11 @@
 // The store itself: the lock and recovery gate, the settings dialog
-// (location, export, encryption, updates) and the export dialog.
+// (location, export, encryption, updates), the export dialog and the
+// first-run offer to copy an installed copy's library.
 import { api } from '../api.js';
 import { esc, errText } from '../util.js';
 import { ICONS, brandMark, modalShell } from '../kit.js';
 import {
-  S, $, run, toast, renderModal, openModal, closeModal, focusNext, formError, boot, refreshStatus,
+  S, $, run, busy, toast, renderModal, openModal, closeModal, focusNext, formError, boot, refreshStatus,
 } from '../app.js';
 
 // ------------------------------------------------------------------ gate
@@ -35,10 +36,10 @@ export function gateView(S) {
     ${brandMark(48)}
     <h1>The store could not be loaded</h1>
     <pre class="error-block mono">${esc(st.error || 'unknown error')}</pre>
-    <p class="muted">The store file is the source of truth and Envarsa won't touch it while it can't read it. A one-step backup (<span class="mono">.bak</span>) sits next to it after every save.</p>
+    <p class="muted">The store file is the source of truth and Envarsa won't touch it while it can't read it. Envarsa keeps the previous version next to it as <span class="mono">.bak</span>.</p>
     <div class="gate-actions">
       <button class="btn" data-act="reveal-store"><span class="btn-ic">${ICONS.folder}</span>Show the file</button>
-      ${st.backupExists ? '<button class="btn" data-act="restore-backup">Restore the backup</button>' : ''}
+      ${st.backupExists ? '<button class="btn" data-act="restore-backup">Restore the previous version</button>' : ''}
       <button class="btn btn-ghost" data-act="retry-boot">Try again</button>
     </div>
     <p class="gate-path mono">${esc(st.storePath)}</p>
@@ -73,7 +74,7 @@ function aboutSection(st, m) {
         ${st.updateAvailable ? `<button class="btn btn-accent" data-act="open-releases">Get ${esc(st.updateAvailable)} from GitHub</button>` : ''}
       </div>
       ${m.updError ? `<p class="form-error">${esc(m.updError)}</p>` : ''}
-      ${!m.updError && st.updateAvailable ? `<p class="hint">Envarsa <strong>${esc(st.updateAvailable)}</strong> is available — the button opens the releases page in your browser; nothing downloads or installs itself.</p>` : ''}
+      ${!m.updError && st.updateAvailable ? `<p class="hint">Envarsa <strong>${esc(st.updateAvailable)}</strong> is available — the button opens the releases page in your browser; nothing downloads or installs itself. Save the new version into this copy's folder so it keeps using the same <span class="mono">Envarsa Data</span>; the old file can then be deleted.</p>` : ''}
       ${!m.updError && !st.updateAvailable && m.updDone ? `<p class="hint">You're up to date — ${esc(st.appVersion)} is the latest release.</p>` : ''}
       <label class="check"><input type="checkbox" data-input="auto-update-toggle"${st.autoUpdateCheck ? ' checked' : ''}> Check for updates automatically</label>
       <p class="hint">Off by default. When on, Envarsa asks GitHub for the newest release number shortly after launch, at most once a day — that request is the only network call the app makes, and nothing about your library goes with it.</p>`;
@@ -126,7 +127,7 @@ function settingsModal(S, m) {
       ${st.customLocation ? `
       <p class="hint">This library lives at a location chosen in an earlier version.</p>
       <div class="settings-actions"><button class="btn" data-act="move-store-to-default">Move to default location</button></div>` : ''}
-      <p class="muted">One portable file holds everything${st.backupExists ? ' — a one-step <span class="mono">.bak</span> sits next to it' : ''}. Portability is manual and yours: export a copy to carry over (optionally encrypted for the trip), or import another store's projects into this one.</p>
+      <p class="muted">One file holds everything${st.backupExists ? ', with the previous version beside it as <span class="mono">.bak</span>' : ''}, and nothing outside its folder keeps a copy: export one to back up or carry over (optionally encrypted for the trip), or import another store's projects into this one.</p>
       <div class="settings-actions">
         <button class="btn" data-act="reveal-store"><span class="btn-ic">${ICONS.folder}</span>${REVEAL_LABEL}</button>
         <button class="btn" data-act="open-export-store"><span class="btn-ic">${ICONS.download}</span>Export…</button>
@@ -165,6 +166,18 @@ function exportStoreModal(S, m) {
   </form>`);
 }
 
+// The one-time offer on a downloaded build's first run (main.js opens it).
+function copyInstalledModal(S, m) {
+  return modalShell({ cls: 'copy-installed', label: 'Copy your library?' }, `
+  <p>Envarsa found the library an installed copy keeps:</p>
+  <p class="mono settings-path" title="${esc(S.status.installedStore)}">${esc(S.status.installedStore)}</p>
+  <p class="muted">This copy keeps its library in the <span class="mono">Envarsa Data</span> folder beside it. Copying leaves the installed copy's file where it is.</p>
+  <footer class="modal-foot">
+    <button class="btn" data-act="close-modal">Start empty</button>
+    <button class="btn btn-accent" data-act="copy-installed-store"${m.busy ? ' disabled' : ''}>${m.busy ? 'Copying…' : 'Copy the library'}</button>
+  </footer>`);
+}
+
 // ---------------------------------------------------------------- updates
 
 // classList only, no innerHTML: an auto-check landing seconds after boot
@@ -194,6 +207,7 @@ export const modals = {
       renderModal();
     },
   },
+  'copy-installed': { view: copyInstalledModal },
 };
 
 export const actions = {
@@ -236,7 +250,12 @@ export const actions = {
   'restore-backup': run(async () => {
     await api.restoreBackup();
     await boot();
-    toast('Backup restored');
+    toast('Previous version restored');
+  }),
+  'copy-installed-store': busy('copy-installed', async () => {
+    await api.copyInstalledStore();
+    await boot();
+    toast('Library copied');
   }),
   'retry-boot': run(async () => boot()),
 };

@@ -33,7 +33,7 @@ flowchart LR
 | File | What it owns |
 |---|---|
 | `main.rs` | Builds the app: plugins (single instance, dialog, opener), boot-time state, the drag-and-drop hook and the command list. It also sets the Windows title-bar colours. |
-| `state.rs` | Holds the in-memory state, meaning the session (unlocked, locked or corrupt), the config, and the tokens for picked files and write targets. It also resolves the store location (`ENVARSA_STORE_PATH`, then a location chosen in an earlier version, then app data, which in the Flatpak is the sandbox's own data folder), loads `config.json` forgivingly, and seeds demo data (`ENVARSA_DEMO`, from `demo.json`). |
+| `state.rs` | Holds the in-memory state, meaning the session (unlocked, locked or corrupt), the config, and the tokens for picked files and write targets. It also resolves the store location (`ENVARSA_STORE_PATH`, then a location chosen in an earlier version, then `Envarsa Data` beside a downloaded build, otherwise app data, which in the Flatpak is the sandbox's own data folder), finds the store an installed copy kept (`com.envarsa.app`) for the first-run copy offer, loads `config.json` forgivingly, and seeds demo data (`ENVARSA_DEMO`, from `demo.json`). |
 | `store.rs` | Defines the store file: its format, serialization, `open` (plain or age), `save` with a `.bak`, `write_atomic`, `align_backup`, and `merge_import` for imports. |
 | `envfile.rs` | The `.env` line model (`Line`), which is also the editor's wire format. Covers parsing, serialization, value quoting, and the merge that writes `.env.local` and reports its changes in the same pass. |
 | `envpath.rs` | Classifies a file name as writable (`.env*.local`), an example (never written) or other, and gives the refusal text for the last two. |
@@ -46,7 +46,7 @@ flowchart LR
 | `commands/library.rs` | Listing, the project view with reuse badges, capture (from a paste, a picked file or a dropped file), the editor, project edits, delete, and restoring an older snapshot. |
 | `commands/secrets.rs` | Reveal, and copy to the clipboard. |
 | `commands/export.rs` | Exporting a snapshot or a copy of the store, and the whole `.env.local` write: staging, the write plan, preview and write. |
-| `commands/transfer.rs` | Revealing the store file, moving a store from a location chosen in an earlier version back to the default (the old file is left in place), and importing another store. |
+| `commands/transfer.rs` | Revealing the store file, moving a store from a location chosen in an earlier version back to the default (the old file is left in place), copying an installed copy's library on a download's first run, and importing another store. |
 | `commands/tests.rs` | Every command end to end, over a real store in a temp folder, through Tauri's mock app. |
 
 `tests/glib_variant_str_iter.rs` proves the vendored glib security patch (`vendor/`, see `vendor/README.md`).
@@ -69,11 +69,11 @@ flowchart LR
 |---|---|
 | `tools/check-contract.sh` | Checks that `api.js` and the command list match, that the mock answers every command, that emitted and handled events match, and that every `data-*` key has a handler. |
 | `.github/workflows/ci.yml` | On every pull request: `cargo fmt --check`, `cargo test` and the contract script on Linux, and `cargo test` on Windows. |
-| `.github/workflows/release.yml` | Tagged releases: the Windows installer and MSIX, the Flatpak bundle (through `flatpak.yml`), and the engine tests on Linux. The installer and the bundle are attached to the GitHub Release. |
+| `.github/workflows/release.yml` | Tagged releases: the portable Windows exe and the MSIX, the engine tests and the AppImage on Linux, and the Flatpak bundle (through `flatpak.yml`). The exe, the AppImage and the bundle are attached to the GitHub Release. |
 | `.github/workflows/flatpak.yml` | Builds and lints the Flatpak bundle in Flathub's CI image, on pull requests that touch the packaging or the dependencies, and for `release.yml`. |
 | `tools/package-msix.ps1`, `Package.appxmanifest`, `Assets/` | Microsoft Store packaging. |
 | `flatpak/`, `tools/flatpak-cargo-sources.sh` | The Flatpak: its manifest, desktop file and metainfo, and the script that lists every crate in `Cargo.lock` as a source for the offline build. On Linux the app identifier is `io.github.terminalis.Envarsa` (`tauri.linux.conf.json`); Windows keeps `com.envarsa.app`. `flatpak/README.md` covers building, linting and Flathub. |
-| `website/` | envarsa.dev, published by `pages.yml`. |
+| `website/` | envarsa.dev, published by `pages.yml`, which fills the newest release's version into the download links; `release.yml` redeploys it after each release. |
 
 ## From the webview to disk
 

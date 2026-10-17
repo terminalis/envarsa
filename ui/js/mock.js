@@ -64,7 +64,7 @@ const COMMANDS = {
   store_status: () => ({
     state: S.locked ? 'locked' : 'unlocked',
     storePath: 'C:\\Users\\you\\AppData\\Roaming\\com.envarsa.app\\envarsa.store',
-    encrypted: S.encrypted, envOverride: false, customLocation: false, backupExists: true,
+    encrypted: S.encrypted, envOverride: false, customLocation: false, installedStore: null, backupExists: true,
     projectCount: PROJECTS.length, error: null, appVersion: '0.1.0-mock',
     updateAvailable: S.updateAvailable, autoUpdateCheck: S.autoUpdateCheck, channel: 'direct',
   }),
@@ -132,7 +132,8 @@ const COMMANDS = {
     };
   },
   apply_import: () => ({ added: 1, replaced: 0, renamed: 1, skipped: 0 }),
-  restore_backup: () => raise('the store loaded fine — restoring the backup is only for when it cannot be read'),
+  restore_backup: () => raise('the store loaded fine — restoring the previous version is only for when it cannot be read'),
+  copy_installed_store: () => {},
   // Always "finds" an update, so the available state is clickable.
   check_for_updates: () => { S.updateAvailable = '9.9.9'; return { latest: '9.9.9', updateAvailable: true }; },
   set_auto_update_check: ({ enabled }) => { S.autoUpdateCheck = enabled; },

@@ -58,7 +58,7 @@
   <div class="container">
     <p class="kicker"># privacy</p>
     <h1><span class="accent">Envarsa</span> Privacy Policy</h1>
-    <p class="updated">Last updated: October 1, 2026</p>
+    <p class="updated">Last updated: October 17, 2026</p>
 
     <p class="lede">
       Envarsa is <strong>local-first</strong>. There are no accounts, no cloud, no telemetry, and no analytics.
@@ -75,9 +75,10 @@
 
     <h2>Where your data lives</h2>
     <p>
-      Everything Envarsa stores lives locally in a single store file on your device
-      (<code>%APPDATA%\com.envarsa.app\envarsa.store</code> on Windows,
-      <code>~/.var/app/io.github.terminalis.Envarsa/data/envarsa.store</code> in the Linux Flatpak). The file is plaintext
+      Everything Envarsa stores lives locally in a single store file on your device: in an
+      <code>Envarsa Data</code> folder beside the portable exe or AppImage,
+      <code>%APPDATA%\com.envarsa.app\envarsa.store</code> in the Microsoft Store version, and
+      <code>~/.var/app/io.github.terminalis.Envarsa/data/envarsa.store</code> in the Linux Flatpak. The file is plaintext
       JSON by default, with optional passphrase encryption at rest in the standard
       <a href="https://age-encryption.org" rel="noopener">age</a> format. It is never uploaded or synchronized by Envarsa; any backup is something you set up yourself.
     </p>
@@ -90,7 +91,8 @@
         or when you click &ldquo;Check for updates.&rdquo;
       </p>
       <p>
-        The update check exists only in the Windows installer from GitHub Releases. The <strong>Microsoft Store
+        The update check exists only in the portable downloads from GitHub Releases (the Windows exe and
+        the AppImage). The <strong>Microsoft Store
         and Flatpak builds make no network connection at all</strong>; the Flatpak has no network permission.
       </p>
     </div>

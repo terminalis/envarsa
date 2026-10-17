@@ -65,6 +65,7 @@ export const api = {
   inspectImport: (token, passphrase = null) => invoke('inspect_import', { token, passphrase }),
   applyImport: (token, passphrase, decisions) => invoke('apply_import', { token, passphrase, decisions }),
   restoreBackup: () => invoke('restore_backup'),
+  copyInstalledStore: () => invoke('copy_installed_store'),
 
   checkForUpdates: () => invoke('check_for_updates'),
   setAutoUpdateCheck: (enabled) => invoke('set_auto_update_check', { enabled }),

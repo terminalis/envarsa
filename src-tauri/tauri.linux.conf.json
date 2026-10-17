@@ -4,6 +4,6 @@
     "enableGTKAppId": true
   },
   "bundle": {
-    "active": false
+    "targets": ["appimage"]
   }
 }

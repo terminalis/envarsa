@@ -68,6 +68,27 @@ pub(super) fn move_to_default(inner: &mut Inner, default: PathBuf) -> R<String> 
     Ok(old.to_string_lossy().to_string())
 }
 
+/// Copy an installed copy's library over a downloaded build's new, empty
+/// store: the one-time offer on its first run. The installed copy's file
+/// stays where it is.
+///
+/// Invariant: ATOMIC-WRITES (ARCHITECTURE.md), via `store::write_atomic`.
+#[tauri::command]
+pub fn copy_installed_store(state: State<'_, AppState>) -> R<()> {
+    state.with(|inner| {
+        let from = inner
+            .installed_store
+            .clone()
+            .ok_or_else(|| "there is no installed library to copy".to_string())?;
+        let bytes =
+            fs::read(&from).map_err(|e| format!("could not read {}: {e}", from.display()))?;
+        store::write_atomic(&inner.store_path, &bytes)?;
+        inner.session = state::init_session(&inner.store_path);
+        inner.installed_store = None;
+        Ok(())
+    })
+}
+
 /// Read the copy back: it must hold exactly `bytes` and open as a store.
 /// An encrypted store opens as NeedsPassphrase, which is fine here.
 fn check_copy(path: &Path, bytes: &[u8]) -> R<()> {
