@@ -80,6 +80,16 @@
   </supports>
 
   <releases>
+    <release version="2.1.1" date="2026-10-17">
+      <description>
+        <p>
+          Flatpak installs from the terminalis repository now update through flatpak update and your
+          software center. If you installed a .flatpak file, run flatpak uninstall --user
+          io.github.terminalis.Envarsa, then flatpak install --user
+          https://terminalis.github.io/flatpak/envarsa.flatpakref, to switch; your library stays.
+        </p>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-10-17">
       <description>
         <p>
