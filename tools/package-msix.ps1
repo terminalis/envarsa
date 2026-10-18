@@ -1,6 +1,4 @@
-# Builds an UNSIGNED MSIX for Microsoft Store submission from the current
-# release build. The Store re-signs the package with a Microsoft certificate
-# on ingestion, so this package must NOT be Authenticode-signed.
+# Builds an unsigned MSIX from the current release build.
 #
 # Prereqs: release binary built (npm run build, or cargo build --release).
 # Windows SDK provides makeappx.exe.
@@ -57,4 +55,4 @@ if (Test-Path $out) { Remove-Item $out -Force }
 if ($LASTEXITCODE -ne 0) { throw "makeappx failed (exit $LASTEXITCODE)" }
 
 $mb = [math]::Round((Get-Item $out).Length / 1MB, 2)
-('Built {0} ({1} MB), UNSIGNED. Submit to Partner Center; the Store signs it. Run WACK before submitting.' -f $out, $mb)
+('Built {0} ({1} MB), unsigned.' -f $out, $mb)

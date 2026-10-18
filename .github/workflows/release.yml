@@ -1,7 +1,7 @@
 # Builds the release artifacts and publishes them to a GitHub Release: the
 # portable Windows exe, the portable Linux AppImage and the Flatpak bundle.
-# The MSIX for the Microsoft Store is built alongside and kept as a workflow
-# artifact. The exe and the AppImage carry the version in their names
+# The MSIX for the Microsoft Store is built alongside. The exe and the
+# AppImage carry the version in their names
 # (Envarsa_x.y.z_x64.exe, Envarsa_x.y.z_amd64.AppImage); either keeps its
 # library in the Envarsa Data folder beside it, so a newer file saved into
 # the same folder picks the library up.
@@ -108,14 +108,12 @@ jobs:
           name: envarsa-windows-x64
           path: Envarsa_*_x64.exe
 
-      # Unsigned MSIX for the Microsoft Store. Kept as a workflow artifact (not
-      # a public release asset) — download it from this run's Artifacts and
-      # upload to Partner Center, where the Store signs it on ingestion.
-      - name: Attach MSIX to the run (for Microsoft Store upload)
+      # Not zipped: the artifact is the .msix itself, named after the file.
+      - name: Attach MSIX to the run
         uses: actions/upload-artifact@v7
         with:
-          name: envarsa-msix-x64
           path: out/Envarsa_*.msix
+          archive: false
 
   build-linux:
     runs-on: ubuntu-22.04

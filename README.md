@@ -45,7 +45,8 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
   (`chmod +x`) and run it.
 - To update either one, save the new file into the same folder; it picks up the same `Envarsa Data`, and the old
   file can be deleted.
-- **Microsoft Store:** the MSIX from the release run, uploaded to Partner Center.
+- **Microsoft Store:** [Envarsa on the Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M), which keeps
+  it updated.
 - **Flatpak:** `flatpak install --user https://terminalis.github.io/packages/flatpak/envarsa.flatpakref`
   installs from the signed repository in [terminalis/packages](https://github.com/terminalis/packages), so
   `flatpak update` and software centers pick up each release. `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases
