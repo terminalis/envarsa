@@ -11,7 +11,7 @@
 # (workflow_dispatch) builds the same artifacts and attaches them to the run
 # for inspection without creating a release.
 #
-# `version` refuses a tag that doesn't match Cargo.toml, and any version
+# `version` refuses a tag that doesn't match package.json, and any version
 # without a <release> entry in the Flatpak metainfo: AppStream lists each
 # release with its date, and software centers show them.
 #
@@ -41,8 +41,8 @@ permissions:
   contents: write
 
 jobs:
-  # src-tauri/Cargo.toml is the one place the app version lives; Tauri reads it
-  # when tauri.conf.json has no version of its own.
+  # package.json is the one place the app version lives; Tauri reads it
+  # through tauri.conf.json's "version": "../package.json".
   version:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -51,12 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Read the app version from Cargo.toml
+      - name: Read the app version from package.json
         id: read
-        run: |
-          version=$(cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml |
-            jq -r '.packages[] | select(.name == "envarsa") | .version')
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
 
       - name: Fail if tag does not match the app version
         if: github.ref_type == 'tag'
@@ -64,7 +61,7 @@ jobs:
           VERSION: ${{ steps.read.outputs.version }}
         run: |
           if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
-            echo "tag $GITHUB_REF_NAME does not match Cargo.toml version v$VERSION" >&2
+            echo "tag $GITHUB_REF_NAME does not match package.json version v$VERSION" >&2
             exit 1
           fi
 

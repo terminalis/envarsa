@@ -29,13 +29,7 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_BODY_BYTES: u64 = 256 * 1024;
 const CHECK_INTERVAL_SECS: i64 = 24 * 60 * 60;
 
-/// The version of this build: Cargo.toml's, which is also what Tauri
-/// reports, since tauri.conf.json carries no version of its own.
-pub fn running_version() -> semver::Version {
-    semver::Version::parse(env!("CARGO_PKG_VERSION")).expect("Cargo.toml has a semver version")
-}
-
-fn agent() -> ureq::Agent {
+fn agent(running: &semver::Version) -> ureq::Agent {
     ureq::Agent::config_builder()
         .tls_config(
             ureq::tls::TlsConfig::builder()
@@ -50,14 +44,15 @@ fn agent() -> ureq::Agent {
         .max_redirects(0)
         .https_only(true)
         // GitHub's API rejects requests without a User-Agent.
-        .user_agent(format!("envarsa/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("envarsa/{running}"))
         .build()
         .new_agent()
 }
 
-/// Blocking; callers run it on a worker thread.
-fn fetch_latest_version() -> Result<semver::Version, String> {
-    let mut resp = agent()
+/// Blocking; callers run it on a worker thread. `running` is this
+/// build's version, for the User-Agent.
+fn fetch_latest_version(running: &semver::Version) -> Result<semver::Version, String> {
+    let mut resp = agent(running)
         .get(LATEST_RELEASE_API)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
@@ -144,7 +139,7 @@ pub fn maybe_spawn_auto_check(app: AppHandle) {
             return;
         }
 
-        let Ok(latest) = fetch_latest_version() else {
+        let Ok(latest) = fetch_latest_version(&app.package_info().version) else {
             return;
         };
         if record_check(&app, &latest) {
@@ -159,7 +154,10 @@ pub fn maybe_spawn_auto_check(app: AppHandle) {
 /// Returns whether `latest` is newer.
 fn record_check(app: &AppHandle, latest: &semver::Version) -> bool {
     let now = chrono::Utc::now().timestamp();
-    let current = &running_version();
+    // Tauri's version of this build, which tauri.conf.json takes from
+    // package.json. Not CARGO_PKG_VERSION: Cargo.toml has no version, so
+    // that is 0.0.0 and every release would look newer.
+    let current = &app.package_info().version;
     let newer = latest > current;
     let _ = app.state::<AppState>().with(|inner| {
         apply_check(&mut inner.config, latest, current, now);
@@ -198,7 +196,8 @@ pub async fn check_for_updates(app: AppHandle) -> Result<UpdateCheckResult, Stri
                 .into(),
         );
     }
-    let latest = tauri::async_runtime::spawn_blocking(fetch_latest_version)
+    let running = app.package_info().version.clone();
+    let latest = tauri::async_runtime::spawn_blocking(move || fetch_latest_version(&running))
         .await
         .map_err(|e| format!("update check failed: {e}"))??;
     let update_available = record_check(&app, &latest);
@@ -278,7 +277,7 @@ mod tests {
     #[test]
     #[ignore = "hits the network — run explicitly"]
     fn live_probe_reaches_github() {
-        match fetch_latest_version() {
+        match fetch_latest_version(&semver::Version::new(0, 0, 0)) {
             Ok(v) => println!("latest published release: {v}"),
             Err(e) => {
                 println!("no usable release ({e})");

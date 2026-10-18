@@ -1,6 +1,5 @@
 [package]
 name = "envarsa"
-version = "2.1.1"
 description = "Envarsa — a local-first library for your environment values."
 edition = "2021"
 rust-version = "1.77"

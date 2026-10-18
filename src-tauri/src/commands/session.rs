@@ -5,7 +5,7 @@ use crate::store::{self, Opened, Store};
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use tauri::State;
+use tauri::{AppHandle, Runtime, State};
 
 // ---------------------------------------------------------------- status
 
@@ -47,7 +47,8 @@ pub struct StatusPayload {
     pub channel: Channel,
 }
 
-fn status_of(inner: &Inner) -> StatusPayload {
+/// `version` is Tauri's version of this build (`package_info().version`).
+fn status_of(inner: &Inner, version: &semver::Version) -> StatusPayload {
     let (state, encrypted, project_count, error) = match &inner.session {
         Session::Unlocked { store, passphrase } => (
             SessionState::Unlocked,
@@ -59,7 +60,6 @@ fn status_of(inner: &Inner) -> StatusPayload {
         Session::Corrupt { error } => (SessionState::Corrupt, false, None, Some(error.clone())),
     };
     let channel = crate::channel::current();
-    let version = crate::update::running_version();
     StatusPayload {
         state,
         store_path: inner.store_path.to_string_lossy().to_string(),
@@ -89,7 +89,7 @@ fn status_of(inner: &Inner) -> StatusPayload {
                 .available_version
                 .as_deref()
                 .and_then(|t| crate::update::parse_tag(t).ok())
-                .filter(|v| *v > version)
+                .filter(|v| v > version)
                 .map(|v| v.to_string())
         },
         auto_update_check: inner.config.auto_update_check,
@@ -97,9 +97,14 @@ fn status_of(inner: &Inner) -> StatusPayload {
     }
 }
 
+/// Generic over the runtime, like `restore_backup`, so the tests can call
+/// it on Tauri's mock app.
 #[tauri::command]
-pub fn store_status(state: State<'_, AppState>) -> R<StatusPayload> {
-    state.with(|inner| Ok(status_of(inner)))
+pub fn store_status<Rt: Runtime>(
+    app: AppHandle<Rt>,
+    state: State<'_, AppState>,
+) -> R<StatusPayload> {
+    state.with(|inner| Ok(status_of(inner, &app.package_info().version)))
 }
 
 #[tauri::command]
@@ -248,7 +253,10 @@ pub fn disable_encryption(state: State<'_, AppState>, passphrase: String) -> R<(
 /// on an encrypted one a possible downgrade to whatever the previous
 /// version holds.
 #[tauri::command]
-pub fn restore_backup(state: State<'_, AppState>) -> R<StatusPayload> {
+pub fn restore_backup<Rt: Runtime>(
+    app: AppHandle<Rt>,
+    state: State<'_, AppState>,
+) -> R<StatusPayload> {
     state.with(|inner| {
         if !matches!(inner.session, Session::Corrupt { .. }) {
             return Err(
@@ -263,7 +271,7 @@ pub fn restore_backup(state: State<'_, AppState>) -> R<StatusPayload> {
         fs::copy(&bak, &inner.store_path)
             .map_err(|e| format!("could not restore the previous version: {e}"))?;
         inner.session = state::init_session(&inner.store_path);
-        Ok(status_of(inner))
+        Ok(status_of(inner, &app.package_info().version))
     })
 }
 

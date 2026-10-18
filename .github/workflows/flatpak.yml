@@ -39,11 +39,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The image has no cargo; the package version is the first top-level
-      # `version` line.
-      - name: Read the app version from Cargo.toml
+      # The image has no Node. Only top-level keys sit two spaces in, so this
+      # matches package.json's own "version" and no nested one.
+      - name: Read the app version from package.json
         id: read
-        run: echo "version=$(sed -n 's/^version = "\(.*\)"$/\1/p' src-tauri/Cargo.toml | head -n 1)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(sed -n 's/^  "version": *"\([^"]*\)".*/\1/p' package.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Generate cargo-sources.json
         run: tools/flatpak-cargo-sources.sh
