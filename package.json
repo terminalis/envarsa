@@ -1,6 +1,6 @@
 {
   "name": "envarsa",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "Envarsa — a local-first library for your environment values.",
   "scripts": {
