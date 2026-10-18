@@ -27,7 +27,7 @@
 # flatpak.yml, which builds the bundle in Flathub's CI image and lints it.
 #
 # After publishing, `publish` redeploys the website and starts
-# terminalis/flatpak's publish.yml, which adds the new bundle to the signed
+# publish.yml in terminalis/packages, which adds the new bundle to the signed
 # Flatpak repository that Flatpak installs update from.
 
 name: release
@@ -196,10 +196,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
 
-      # The Flatpak repository (terminalis/flatpak) imports each release's
+      # The Flatpak repository (terminalis/packages) imports each release's
       # bundle. GITHUB_TOKEN can't start workflows in another repo, so this
       # uses a separate token.
       - name: Add the bundle to the Flatpak repository
         env:
           GH_TOKEN: ${{ secrets.FLATPAK_REPO_TOKEN }}
-        run: gh workflow run publish.yml --repo terminalis/flatpak --ref main
+        run: gh workflow run publish.yml --repo terminalis/packages --ref main

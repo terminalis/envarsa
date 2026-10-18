@@ -86,7 +86,7 @@
           Flatpak installs from the terminalis repository now update through flatpak update and your
           software center. If you installed a .flatpak file, run flatpak uninstall --user
           io.github.terminalis.Envarsa, then flatpak install --user
-          https://terminalis.github.io/flatpak/envarsa.flatpakref, to switch; your library stays.
+          https://terminalis.github.io/packages/flatpak/envarsa.flatpakref, to switch; your library stays.
         </p>
       </description>
     </release>

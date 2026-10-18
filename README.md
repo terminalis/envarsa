@@ -45,10 +45,10 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
 - To update either one, save the new file into the same folder; it picks up the same `Envarsa Data`, and the old
   file can be deleted.
 - **Microsoft Store:** the MSIX from the release run, uploaded to Partner Center.
-- **Flatpak:** `flatpak install --user https://terminalis.github.io/flatpak/envarsa.flatpakref` installs from
-  the signed repository in [terminalis/flatpak](https://github.com/terminalis/flatpak), so `flatpak update`
-  and software centers pick up each release. `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases installs the
-  same app from a file, without updates.
+- **Flatpak:** `flatpak install --user https://terminalis.github.io/packages/flatpak/envarsa.flatpakref`
+  installs from the signed repository in [terminalis/packages](https://github.com/terminalis/packages), so
+  `flatpak update` and software centers pick up each release. `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases
+  installs the same app from a file, without updates.
 
 A version tag runs `.github/workflows/release.yml`, which builds all four and publishes the exe, the AppImage
 and the Flatpak bundle.
