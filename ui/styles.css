@@ -8,18 +8,20 @@
   color-scheme: dark;
   --bg: #0f1116;
   --bg-rail: #13151b;
-  --panel: #171a21;
-  --panel-2: #1c2029;
-  --border: #262b36;
+  --panel: #23272f;
+  --panel-2: #272b34;
+  --border: #3a3f4b;
   --border-soft: #1f242e;
+  /* Form-field edges: at least 3:1 against every surface a field sits on. */
+  --border-field: #757d90;
   --text: #e8eaf0;
   --muted: #8b93a7;
-  --faint: #5c6478;
+  --faint: #666e83;
   --accent: #e5b35a;
   --accent-dim: #b98f48;
   --accent-ink: #221a09;
   --good: #7fd0a7;
-  --warn: #e0b86a;
+  --warn: #db8d54;
   --danger: #e07070;
   --mask: #6b7388;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
@@ -106,7 +108,7 @@ body {
 input[type="search"], input[type="text"], input[type="password"], input:not([type]),
 .snapshot-select, .import-action, #capture-text {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-field);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: inherit;
@@ -346,8 +348,8 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
   gap: 10px;
   margin-top: 12px;
   padding: 8px 12px;
-  background: rgba(229, 179, 90, 0.08);
-  border: 1px solid rgba(229, 179, 90, 0.25);
+  background: rgba(219, 141, 84, 0.08);
+  border: 1px solid rgba(219, 141, 84, 0.25);
   border-radius: var(--radius);
   font-size: 12.5px;
   color: var(--warn);

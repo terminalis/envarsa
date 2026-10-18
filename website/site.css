@@ -7,17 +7,18 @@
 :root {
   --bg: #0f1116;
   --bg-rail: #13151b;
-  --panel: #171a21;
-  --panel-2: #1c2029;
-  --border: #262b36;
+  --panel: #23272f;
+  --panel-2: #272b34;
+  --border: #3a3f4b;
   --border-soft: #1f242e;
   --text: #e8eaf0;
   --muted: #8b93a7;
-  --faint: #5c6478;
+  --faint: #666e83;
   --accent: #e5b35a;
   --accent-dim: #b98f48;
   --accent-ink: #221a09;
   --good: #7fd0a7;
+  --warn: #db8d54;
   --danger: #e07070;
   --mask: #6b7388;
   --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
