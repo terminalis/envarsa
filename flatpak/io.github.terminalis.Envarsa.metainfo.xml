@@ -80,6 +80,14 @@
   </supports>
 
   <releases>
+    <release version="2.1.2" date="2026-10-18">
+      <description>
+        <p>
+          The dark theme has more contrast: warnings are orange, form fields have a clearer edge, and panels
+          and buttons sit a step lighter. On Windows, Start and the taskbar show the app as Envarsa.
+        </p>
+      </description>
+    </release>
     <release version="2.1.1" date="2026-10-17">
       <description>
         <p>
