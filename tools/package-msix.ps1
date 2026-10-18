@@ -6,7 +6,7 @@
 # Windows SDK provides makeappx.exe.
 #
 #   pwsh tools\package-msix.ps1                 # version from Package.appxmanifest
-#   pwsh tools\package-msix.ps1 -Version 1.2.3  # override (CI passes Cargo.toml's version)
+#   pwsh tools\package-msix.ps1 -Version 1.2.3  # override (CI passes package.json's version)
 #
 # -Version takes X.Y.Z and sets the package version to X.Y.Z.0 (the Store
 # reserves the 4th part) WITHOUT editing the committed manifest, so CI keeps the

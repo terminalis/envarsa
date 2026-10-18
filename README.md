@@ -31,7 +31,8 @@ the Flatpak `~/.var/app/io.github.terminalis.Envarsa/data/`, and dev builds the 
 `ENVARSA_STORE_PATH` overrides it; `ENVARSA_DEMO=1` seeds sample projects. Serving `ui/` from
 any static server opens the UI in a plain browser against canned responses (`ui/js/mock.js`).
 
-The app version lives only in `src-tauri/Cargo.toml`; Tauri and the release workflow read it from there.
+The app version lives only in `package.json`: `tauri.conf.json` points Tauri at it, and the release workflows
+read it from there. `npm version X.Y.Z --no-git-tag-version` bumps it, with `package-lock.json`.
 `src-tauri/icons/` keeps just the icons the bundles use. `npx tauri icon <source.png>` regenerates the full set
 (including iOS, Android and macOS files this project doesn't ship); commit only the ones `tauri.conf.json`
 lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.

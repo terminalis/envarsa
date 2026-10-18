@@ -70,7 +70,7 @@ impl Env {
     }
 
     fn status(&self) -> Value {
-        to_json(&session::store_status(self.state()).unwrap())
+        to_json(&session::store_status(self.app.handle().clone(), self.state()).unwrap())
     }
 
     fn projects(&self) -> Vec<Value> {
@@ -154,7 +154,8 @@ fn a_fresh_store_is_unlocked_and_empty() {
     assert_eq!(st["projectCount"], 0);
     assert_eq!(st["encrypted"], false);
     assert_eq!(st["storePath"], env.store_path().to_string_lossy().as_ref());
-    assert_eq!(st["appVersion"], env!("CARGO_PKG_VERSION"));
+    // Tauri's version (the mock app's 0.1.0), not Cargo's 0.0.0.
+    assert_eq!(st["appVersion"], env.app.package_info().version.to_string());
     // A test build has no package identity and runs outside a Flatpak.
     assert_eq!(st["channel"], "direct");
     assert_eq!(st["customLocation"], false);
@@ -513,7 +514,7 @@ fn restore_is_only_for_a_store_that_cannot_be_read() {
     let env = Env::new("cmd-restore");
     env.capture("alpha", "A=1\n");
     env.capture("beta", "B=1\n"); // the backup now holds just alpha
-    let err = session::restore_backup(env.state()).refused();
+    let err = session::restore_backup(env.app.handle().clone(), env.state()).refused();
     assert!(err.contains("only for when"), "{err}");
 
     // Damage the store, then load it the way a restart would.
@@ -525,7 +526,7 @@ fn restore_is_only_for_a_store_that_cannot_be_read() {
     reload.unwrap();
     assert_eq!(env.status()["state"], "corrupt");
 
-    let st = to_json(&session::restore_backup(env.state()).unwrap());
+    let st = to_json(&session::restore_backup(env.app.handle().clone(), env.state()).unwrap());
     assert_eq!(st["state"], "unlocked");
     assert_eq!(st["projectCount"], 1);
 }

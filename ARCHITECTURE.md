@@ -40,7 +40,7 @@ flowchart LR
 | `crypto.rs` | age passphrase encryption. An encrypted store is a plain age file. |
 | `clipboard.rs` | Copying a secret and clearing it after 30 s. On Windows: history and cloud exclusion, and retry with backoff. On Linux: GTK's clipboard, where Envarsa serves the value itself. |
 | `channel.rs` | How this copy was installed (direct download, Microsoft Store or Flatpak), detected once. It answers whether updates come through a store and whether the app runs sandboxed. |
-| `update.rs` | The opt-in update check and the only network code. It holds the three update commands and the build's running version. |
+| `update.rs` | The opt-in update check and the only network code. It holds the three update commands, and compares against Tauri's version of the build (`package_info().version`). |
 | `commands/mod.rs` | Plumbing shared by the commands: `with_store`, `mutate`, `dialog_path`, `host_path` and `read_text_capped`. |
 | `commands/session.rs` | Status, unlock, lock, the three protection changes (through `reprotect`) and restoring a backup. |
 | `commands/library.rs` | Listing, the project view with reuse badges, capture (from a paste, a picked file or a dropped file), the editor, project edits, delete, and restoring an older snapshot. |

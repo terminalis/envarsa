@@ -38,7 +38,7 @@
       uap10:TrustLevel="mediumIL"
       uap10:RuntimeBehavior="packagedClassicApp">
       <uap:VisualElements
-        DisplayName="terminalis.Envarsa"
+        DisplayName="Envarsa"
         Description="A local-first library for your environment variables."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\MedTile.png"
