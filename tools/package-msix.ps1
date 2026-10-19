@@ -46,6 +46,16 @@ $mxText = [IO.File]::ReadAllText($manifest)
 $mxText = $mxText -replace '(?m)^(\s*)Version="[\d.]+"', ('${1}Version="' + $ver + '"')
 [IO.File]::WriteAllText((Join-Path $payload 'AppxManifest.xml'), $mxText, $enc)
 
+# Index the payload's resources. Without resources.pri Windows can't pick the
+# icon for each size (such as the 24 px unplated taskbar icon) and shows the
+# plain tile on an accent-coloured plate instead. makepri sits beside makeappx.
+$makepri = Join-Path (Split-Path $makeappx -Parent) 'makepri.exe'
+$priConfig = Join-Path $env:TEMP 'envarsa-priconfig.xml'
+& $makepri createconfig /cf $priConfig /dq en-US /o | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "makepri createconfig failed (exit $LASTEXITCODE)" }
+& $makepri new /pr $payload /cf $priConfig /of (Join-Path $payload 'resources.pri') /o | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "makepri failed (exit $LASTEXITCODE)" }
+
 $outDir = Join-Path $root 'out'
 New-Item -ItemType Directory -Force $outDir | Out-Null
 $out = Join-Path $outDir ('Envarsa_{0}_{1}.msix' -f $ver, $arch)
