@@ -52,6 +52,6 @@ Both should pass. The one known difference is the source: this manifest builds t
 ## Distribution
 
 Each release attaches the bundle to its GitHub Release, then starts `publish.yml` in
-[terminalis/packages](https://github.com/terminalis/packages). That workflow imports the bundle into the signed
-repository that Flatpak installs update from (`https://terminalis.github.io/packages/flatpak`). The bundle on its
-own installs without updates.
+[terminalis/terminalis.github.io](https://github.com/terminalis/terminalis.github.io). That workflow imports the
+bundle into the signed repository that Flatpak installs update from (`https://terminalis.github.io/packages/flatpak`).
+The bundle on its own installs without updates.
