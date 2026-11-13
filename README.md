@@ -48,8 +48,9 @@ lists, plus `icon.png`. The MSIX tiles live separately in `Assets/`.
 - **Microsoft Store:** [Envarsa on the Microsoft Store](https://apps.microsoft.com/detail/9NQCBXD2WQ2M), which keeps
   it updated.
 - **Flatpak:** `flatpak install --user https://terminalis.github.io/packages/flatpak/envarsa.flatpakref`
-  installs from the signed repository in [terminalis/packages](https://github.com/terminalis/packages), so
-  `flatpak update` and software centers pick up each release. `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases
+  installs from the signed repository in
+  [terminalis/terminalis.github.io](https://github.com/terminalis/terminalis.github.io), so `flatpak update` and
+  software centers pick up each release. `Envarsa_x.y.z_x86_64.flatpak` on GitHub Releases
   installs the same app from a file, without updates.
 
 A version tag runs `.github/workflows/release.yml`, which builds all four and publishes the exe, the AppImage
